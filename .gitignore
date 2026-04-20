@@ -1,0 +1,27 @@
+# Node
+node_modules/
+.pnp
+.pnp.js
+coverage/
+.next/
+out/
+build/
+dist/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+
+# Environment Variables
+.env
+.env.*
+*.env
+
+# General
+.DS_Store
+*.log

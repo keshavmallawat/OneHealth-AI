@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String               @id @default(cuid())
+  name            String
+  emailHash       String               @unique
+  emailEncrypted  String
+  phoneHash       String?              @unique
+  phoneEncrypted  String?
+  passwordHash    String
+  role            Role                 @default(PATIENT)
+  abhaId          String?
+  bloodType       String?
+  createdAt       DateTime             @default(now())
+
+  // Relations
+  records         HealthRecord[]
+  accessTokens    DoctorAccessToken[]  @relation("DoctorTokens")
+  accessLogs      AccessLog[]
+}
+
+model HealthRecord {
+  id          String         @id @default(cuid())
+  userId      String
+  type        RecordType
+  fileUrl     String
+  fileName    String
+  fileSize    Int
+  status      ProcessStatus  @default(PENDING)
+  uploadedAt  DateTime       @default(now())
+
+  // Relations
+  user        User           @relation(fields: [userId], references: [id])
+  accessLogs  AccessLog[]
+}
+
+model DoctorAccessToken {
+  id          String     @id @default(cuid())
+  token       String     @unique
+  patientId   String
+  doctorId    String
+  scope       String[]
+  expiresAt   DateTime
+  revoked     Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+
+  // Relations
+  patient     User       @relation("DoctorTokens", fields: [patientId], references: [id])
+}
+
+model AccessLog {
+  id              String         @id @default(cuid())
+  actorId         String
+  targetRecordId  String?
+  action          String
+  timestamp       DateTime       @default(now())
+  ipAddress       String?
+
+  // Relations
+  actor           User           @relation(fields: [actorId], references: [id])
+  record          HealthRecord?  @relation(fields: [targetRecordId], references: [id])
+}
+
+enum Role {
+  PATIENT
+  DOCTOR
+  ADMIN
+}
+
+enum RecordType {
+  BLOOD_TEST
+  IMAGING
+  PRESCRIPTION
+  DISCHARGE
+  OTHER
+}
+
+enum ProcessStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
