@@ -13,17 +13,35 @@ redisClient.on('error', (err) => {
 
 export class RedisService {
   /**
-   * Store OTP in Redis with TTL (e.g., 300 seconds for 5 minutes)
+   * Store OTP data in Redis with TTL (e.g., 300 seconds for 5 minutes)
    */
-  static async setOTP(identifier: string, otp: string, ttlSeconds: number = 300): Promise<void> {
-    await redisClient.setex(`otp:${identifier}`, ttlSeconds, otp);
+  static async setOTPData(identifier: string, data: any, ttlSeconds: number = 300): Promise<void> {
+    await redisClient.setex(`otp:${identifier}`, ttlSeconds, JSON.stringify(data));
   }
 
   /**
-   * Get OTP from Redis
+   * Get OTP data from Redis
    */
-  static async getOTP(identifier: string): Promise<string | null> {
-    return await redisClient.get(`otp:${identifier}`);
+  static async getOTPData(identifier: string): Promise<any | null> {
+    const data = await redisClient.get(`otp:${identifier}`);
+    return data ? JSON.parse(data) : null;
+  }
+
+  /**
+   * Update OTP data while keeping existing TTL
+   */
+  static async updateOTPData(identifier: string, data: any): Promise<void> {
+    const ttl = await redisClient.ttl(`otp:${identifier}`);
+    if (ttl > 0) {
+      await redisClient.setex(`otp:${identifier}`, ttl, JSON.stringify(data));
+    }
+  }
+
+  /**
+   * Get TTL of an OTP key to enforce cooldown
+   */
+  static async getOtpTTL(identifier: string): Promise<number> {
+    return await redisClient.ttl(`otp:${identifier}`);
   }
 
   /**

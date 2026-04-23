@@ -39,7 +39,7 @@ export const checkRecordAccess = async (req: AuthRequest, res: Response, next: N
       where: { id: recordId }
     });
 
-    if (!record) {
+    if (!record || (record.status === 'DELETED' && userRole !== Role.ADMIN)) {
       return res.status(404).json({ error: 'Record not found' });
     }
 

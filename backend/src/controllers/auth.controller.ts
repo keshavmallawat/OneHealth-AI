@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { z } from 'zod';
 import { JwtService } from '../services/jwt.service';
 import { CryptoService } from '../services/crypto.service';
@@ -45,7 +46,7 @@ export class AuthController {
       // Check if user already exists
       const existingUser = await prisma.user.findUnique({ where: { emailHash } });
       if (existingUser) {
-        return res.status(400).json({ error: 'Email already in use' });
+        return res.status(409).json({ error: 'Email already in use' });
       }
 
       const passwordHash = await bcrypt.hash(password, 12);
@@ -83,9 +84,9 @@ export class AuthController {
           role: user.role
         }
       });
-    } catch (error) {
-      console.error(error);
-      return res.status(500).json({ error: 'Internal server error' });
+    } catch (err: any) {
+      console.error("REGISTER ERROR:", err);
+      return res.status(500).json({ error: err.message || "Server error" });
     }
   }
 
@@ -130,9 +131,9 @@ export class AuthController {
           role: user.role
         }
       });
-    } catch (error) {
-      console.error(error);
-      return res.status(500).json({ error: 'Internal server error' });
+    } catch (err: any) {
+      console.error("LOGIN ERROR:", err);
+      return res.status(500).json({ error: err.message || "Server error" });
     }
   }
 
@@ -205,8 +206,16 @@ export class AuthController {
         return res.status(400).json({ error: 'Identifier required' });
       }
 
+      // Check 60 seconds cooldown
+      const ttl = await RedisService.getOtpTTL(identifier);
+      if (ttl > 240) {
+        return res.status(429).json({ error: `Please wait ${ttl - 240} seconds before requesting a new OTP.` });
+      }
+
       const otp = OtpService.generateOTP();
-      await RedisService.setOTP(identifier, otp, 300); // 5 min TTL
+      const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
+
+      await RedisService.setOTPData(identifier, { hash: hashedOtp, attempts: 0 }, 300); // 5 min TTL
       
       // Reset the verify attempts whenever a new OTP is sent
       await RedisService.deleteRateLimit(`rl:otp_verify:${identifier}`);
@@ -227,13 +236,27 @@ export class AuthController {
         return res.status(400).json({ error: 'Identifier and OTP required' });
       }
 
-      const storedOtp = await RedisService.getOTP(identifier);
-      if (!storedOtp) {
+      const storedData = await RedisService.getOTPData(identifier);
+      if (!storedData) {
         return res.status(400).json({ error: 'OTP expired or not requested' });
       }
 
-      if (storedOtp !== otp) {
-        return res.status(400).json({ error: 'Invalid OTP' });
+      if (storedData.attempts >= 5) {
+        await RedisService.deleteOTP(identifier);
+        return res.status(429).json({ error: 'Too many failed attempts. Request a new OTP.' });
+      }
+
+      const hashedInput = crypto.createHash('sha256').update(otp).digest('hex');
+      
+      if (storedData.hash !== hashedInput) {
+        storedData.attempts += 1;
+        if (storedData.attempts >= 5) {
+          await RedisService.deleteOTP(identifier);
+          return res.status(429).json({ error: 'Too many failed attempts. Request a new OTP.' });
+        } else {
+          await RedisService.updateOTPData(identifier, storedData);
+          return res.status(400).json({ error: 'Invalid OTP' });
+        }
       }
 
       await RedisService.deleteOTP(identifier);
@@ -269,6 +292,26 @@ export class AuthController {
         user: {
           id: user.id,
           name: user.name,
+          role: user.role
+        }
+      });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  static async me(req: any, res: Response) {
+    try {
+      const user = await prisma.user.findUnique({ where: { id: req.user.userId } });
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      return res.json({
+        user: {
+          id: user.id,
+          name: user.name,
+          email: CryptoService.decrypt(user.emailEncrypted),
           role: user.role
         }
       });

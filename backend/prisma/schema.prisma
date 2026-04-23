@@ -34,6 +34,7 @@ model HealthRecord {
   fileName    String
   fileSize    Int
   status      ProcessStatus  @default(PENDING)
+  tags        String[]
   uploadedAt  DateTime       @default(now())
 
   // Relations
@@ -87,4 +88,5 @@ enum ProcessStatus {
   PROCESSING
   DONE
   FAILED
+  DELETED
 }
