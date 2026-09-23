@@ -1,0 +1,41 @@
+# OneHealth AI - AI Service dependencies
+# Deliberately small: every package here is a pure-python or self-contained wheel
+# so the service installs on Windows without any external binary except the
+# optional Tesseract engine (see README - the PDF text-layer path needs no OCR).
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+pydantic==2.10.4
+python-dotenv==1.0.1
+
+# PDF handling. PyMuPDF ships its own renderer, so we do NOT need Poppler
+# (unlike pdf2image) - this is what makes the service work on a stock Windows box.
+pymupdf==1.25.2
+
+# Image handling + OCR bridge. pytesseract needs the Tesseract binary at runtime;
+# the service degrades gracefully when it is absent.
+pillow==11.1.0
+pytesseract==0.3.13
+
+# LLM (optional at runtime - deterministic fallback covers the demo)
+openai==1.59.6
+httpx==0.28.1
+
+# Tests. Small, pure-python, and what `npm run verify` / setup-and-verify.ps1
+# invoke to check the extraction and assistant-safety suites.
+pytest==8.3.4
+
+# Clinical NER: medications, conditions, procedures and allergies from free text.
+# spaCy supplies tokenisation and the entity ruler; medspaCy supplies ConText,
+# which is what stops "denies any history of hypertension" from being recorded as
+# a hypertension diagnosis. Both are optional at runtime - clinical_ner falls back
+# to a rule-based engine with the same output shape and the same negation guard -
+# but the spaCy path is the one we ship.
+#
+# The language model is NOT installed by `pip install -r requirements.txt`. Run:
+#     python -m spacy download en_core_web_sm
+# or install the pinned wheel directly (no network prompt, version-locked):
+#     pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
+spacy==3.7.5
+medspacy==1.3.1
