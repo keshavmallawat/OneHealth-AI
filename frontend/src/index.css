@@ -1,12 +1,200 @@
 @import "tailwindcss";
 
+/*
+ * OneHealth AI — design tokens.
+ *
+ * The visual target is a clinical records product, not a consumer dashboard:
+ * one restrained accent, generous whitespace, borders rather than shadows, and
+ * numerals that line up in a column. Status colour is always paired with a
+ * label or an icon so it is never the only signal.
+ */
 @theme {
-  --color-primary: #aa3bff;
-  --color-primary-dark: #8b2bcf;
+  /* --- Brand ------------------------------------------------------------ */
+  --color-primary:       #0ea5e9;  /* sky 500  — actions, links, active nav */
+  --color-primary-dark:  #0284c7;  /* sky 600  — hover                      */
+  --color-primary-ink:   #0c4a6e;  /* sky 900  — text on tinted surfaces    */
+  --color-primary-soft:  #f0f9ff;  /* sky 50   — tinted surfaces            */
+  --color-primary-line:  #bae6fd;  /* sky 200  — borders on tinted surfaces */
+
+  /* --- Structure -------------------------------------------------------- */
+  --color-ink:        #0f172a;  /* slate 900 — primary text                  */
+  --color-ink-soft:   #475569;  /* slate 600 — secondary text                */
+  --color-muted:      #64748b;  /* slate 500 — labels, metadata              */
+  --color-faint:      #94a3b8;  /* slate 400 — placeholders, disabled        */
+  --color-line:        #e2e8f0;  /* slate 200 — borders                      */
+  --color-line-strong: #cbd5e1;  /* slate 300 — hover / emphasis borders     */
+  --color-line-soft:   #f8fafc;  /* slate 50  — dividers, table stripes      */
+  --color-surface:    #ffffff;
+  --color-canvas:     #f8fafc;  /* page background                           */
+  --color-sunken:     #f1f5f9;  /* table headers, inset panels               */
+
+  /* --- Clinical status -------------------------------------------------- */
+  --color-normal:       #059669;  /* emerald 600 */
+  --color-normal-soft:  #ecfdf5;
+  --color-normal-line:  #a7f3d0;
+
+  --color-high:         #dc2626;  /* red 600 */
+  --color-high-soft:    #fef2f2;
+  --color-high-line:    #fecaca;
+
+  --color-low:          #d97706;  /* amber 600 */
+  --color-low-soft:     #fffbeb;
+  --color-low-line:     #fde68a;
+
+  --color-unknown:      #475569;  /* slate 600 */
+  --color-unknown-soft: #f1f5f9;
+  --color-unknown-line: #e2e8f0;
+
+  /* --- Radius ----------------------------------------------------------- */
+  --radius-control: 4px;
+  --radius-panel: 6px;
+
+  /* --- Elevation -------------------------------------------------------- */
+  --shadow-raised:  0 1px 2px rgb(15 23 42 / 0.05);
+  --shadow-popover: 0 4px 12px rgb(15 23 42 / 0.08);
+  --shadow-overlay: 0 12px 32px rgb(15 23 42 / 0.12);
 }
 
 @layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+      Helvetica, Arial, sans-serif;
+  }
+
   body {
-    @apply bg-gray-50 text-gray-900 antialiased;
+    @apply bg-canvas text-ink antialiased;
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  h1, h2, h3, h4 {
+    @apply text-ink;
+    font-weight: 600;
+    letter-spacing: -0.011em;
+  }
+
+  /* Clinical numbers must align vertically in a column. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  /* The browser default is nearly invisible on a light canvas. */
+  ::selection {
+    background: #dbeafe;
+  }
+
+  .font-clinical {
+    font-family: 'Merriweather', Georgia, serif;
+  }
+}
+
+@layer components {
+  /* --- Panels ----------------------------------------------------------- */
+  .panel {
+    @apply bg-surface border border-line;
+    border-radius: var(--radius-panel);
+  }
+
+  .panel-header {
+    @apply flex items-center justify-between gap-3 px-6 py-4 border-b border-line bg-surface;
+    border-top-left-radius: var(--radius-panel);
+    border-top-right-radius: var(--radius-panel);
+  }
+
+  /* --- Micro label: section eyebrows and table headers ------------------ */
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase text-muted;
+    letter-spacing: 0.06em;
+  }
+
+  /* --- Form controls ---------------------------------------------------- */
+  .field-input {
+    @apply w-full bg-surface border border-line px-3 py-2 text-sm text-ink
+           placeholder:text-faint transition-colors;
+    border-radius: var(--radius-control);
+  }
+  .field-input:hover:not(:disabled):not(:focus) {
+    border-color: var(--color-line-strong);
+  }
+  .field-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgb(29 78 216 / 0.12);
+  }
+  .field-input:disabled {
+    @apply bg-sunken text-muted cursor-not-allowed;
+  }
+  .field-input[aria-invalid="true"] {
+    border-color: var(--color-high);
+  }
+
+  /* Native selects need the arrow drawn back in once appearance is reset. */
+  select.field-input {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 32px;
+  }
+}
+
+@layer utilities {
+  /* Wide tables and charts scroll inside their own container so the page
+     itself never scrolls sideways on a narrow screen. */
+  .scroll-x {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .animate-in {
+    animation: fade-in 0.18s ease-out both;
+  }
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(3px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  .shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.65), transparent);
+    animation: shimmer 1.4s infinite;
+  }
+  @keyframes shimmer {
+    100% { transform: translateX(100%); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-in, .shimmer::after { animation: none; }
+    * { transition-duration: 0.01ms !important; }
+  }
+
+  @media print {
+    body {
+      background: white !important;
+      color: black !important;
+    }
+    nav, header, button, .panel-header, .print\:hidden {
+      display: none !important;
+    }
+    .panel {
+      border: none !important;
+      box-shadow: none !important;
+      break-inside: avoid;
+    }
   }
 }
