@@ -1,0 +1,41 @@
+# Line endings.
+#
+# `text=auto` stores every text file with LF *in the repository* while leaving
+# each machine's working copy alone. That is what keeps a Windows checkout and
+# a Linux CI runner from seeing every file as a whole-file diff.
+#
+# It deliberately does NOT say `eol=lf` here. That variant forces LF into the
+# working tree too, which breaks the Windows batch files in this project - a
+# .bat with LF endings misparses - and git refuses the conversion outright
+# ("CRLF would be replaced by LF") rather than corrupt them silently. The
+# per-type rules below set the working-tree ending each file format actually
+# requires.
+* text=auto
+
+# Windows scripts: must keep CRLF in the working tree or cmd.exe mis-handles
+# them. Still stored as LF in the repository.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Shell scripts and Dockerfiles: must keep LF even when checked out on Windows,
+# or the shell reads the trailing CR as part of the command.
+*.sh         text eol=lf
+Dockerfile   text eol=lf
+*.Dockerfile text eol=lf
+
+# Binary assets must never be line-ending converted.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.pdf   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.zip   binary
+
+# Generated lockfiles: kept in the repository, but collapsed in diffs and
+# excluded from the language statistics.
+package-lock.json linguist-generated=true
