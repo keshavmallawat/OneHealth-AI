@@ -1,31 +1,64 @@
 import { Router } from 'express';
 import { RecordsController } from '../controllers/records.controller';
 import { verifyToken } from '../middleware/auth.middleware';
-import { uploadMiddleware } from '../middleware/upload.middleware';
-import { requireRole, checkRecordAccess } from '../middleware/rbac.middleware';
+import { uploadMiddleware, handleUploadErrors } from '../middleware/upload.middleware';
+import { requireRole, checkRecordAccess, checkPatientAccess } from '../middleware/rbac.middleware';
 import { Role } from '@prisma/client';
 
 const router = Router();
 
-// Apply auth middleware to all records routes
+// Every route below requires a valid access token.
 router.use(verifyToken);
 
-// CREATE
-router.post('/upload', requireRole([Role.PATIENT]), uploadMiddleware.single('file'), RecordsController.uploadRecord);
+// --- Aggregates (declared before /:id so they are not captured by it) --------
+router.get('/stats', requireRole([Role.PATIENT]), RecordsController.getStats);
+router.get('/trends', requireRole([Role.PATIENT]), RecordsController.getTrends);
+router.get('/compare', requireRole([Role.PATIENT]), RecordsController.compare);
+router.get('/activity', requireRole([Role.PATIENT]), RecordsController.getActivity);
+router.get('/summary.pdf', requireRole([Role.PATIENT]), RecordsController.exportSummary);
 
-// READ (List)
+// Provider views of an authorised patient. checkPatientAccess re-verifies the
+// consent on every call, so reaching the doctor UI grants nothing by itself.
+router.get(
+  '/patients/:patientId/trends',
+  requireRole([Role.DOCTOR]),
+  checkPatientAccess,
+  RecordsController.getTrends
+);
+router.get(
+  '/patients/:patientId/summary.pdf',
+  requireRole([Role.DOCTOR]),
+  checkPatientAccess,
+  RecordsController.exportSummary
+);
+
+// --- CRUD -------------------------------------------------------------------
+router.post(
+  '/upload',
+  requireRole([Role.PATIENT]),
+  uploadMiddleware.single('file'),
+  handleUploadErrors,
+  RecordsController.uploadRecord
+);
+
 router.get('/', requireRole([Role.PATIENT]), RecordsController.listRecords);
-
-// READ (Single)
 router.get('/:id', checkRecordAccess, RecordsController.getRecord);
 
-// UPDATE
-router.patch('/:id', requireRole([Role.PATIENT]), checkRecordAccess, RecordsController.updateRecord);
+// Authenticated file access. Ownership (or consent) is re-checked on every
+// request; there is no unauthenticated route to an uploaded document.
+router.get('/:id/file', checkRecordAccess, RecordsController.streamFile);
 
-// DELETE
+router.post(
+  '/:id/reprocess',
+  requireRole([Role.PATIENT]),
+  checkRecordAccess,
+  RecordsController.reprocessRecord
+);
+
+router.patch('/:id', requireRole([Role.PATIENT]), checkRecordAccess, RecordsController.updateRecord);
 router.delete('/:id', requireRole([Role.PATIENT]), checkRecordAccess, RecordsController.deleteRecord);
 
-// Deprecated (aliased to getRecord)
+// Deprecated alias kept for backwards compatibility.
 router.get('/:id/url', checkRecordAccess, RecordsController.getFileAccessUrl);
 
 export default router;

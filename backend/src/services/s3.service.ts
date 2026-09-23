@@ -40,6 +40,23 @@ export class S3Service {
   }
 
   /**
+   * Streams an object back into memory. Used by the storage abstraction so the
+   * AI pipeline can re-read a file it did not keep a copy of.
+   */
+  static async getObjectBuffer(key: string): Promise<Buffer> {
+    const command = new GetObjectCommand({ Bucket: BUCKET_NAME, Key: key });
+    const response = await s3Client.send(command);
+    const body = response.Body as any;
+    if (!body) throw new Error(`S3 object ${key} returned no body`);
+
+    const chunks: Buffer[] = [];
+    for await (const chunk of body as AsyncIterable<Uint8Array>) {
+      chunks.push(Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
+  }
+
+  /**
    * Generates a pre-signed URL to securely access a file.
    * Expiry default is 15 minutes (900 seconds).
    */
