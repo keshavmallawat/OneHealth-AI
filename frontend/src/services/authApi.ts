@@ -1,31 +1,44 @@
-import axios from 'axios';
+/**
+ * Auth endpoints. A thin named-export layer over the shared client so pages
+ * never build URLs by hand.
+ */
+import api, { setAccessToken, getAccessToken, setAuthFailureHandler, apiErrorMessage } from './apiClient';
 
-// Configure axios
-const authApi = axios.create({
-  baseURL: '/api/auth', // using proxy in vite config
-  withCredentials: true, // important for cookies
-});
+export type UserRole = 'PATIENT' | 'DOCTOR' | 'ADMIN';
 
-// Interceptor to attach access token if we had one in memory,
-// but usually we rely on HttpOnly cookies for refresh and 
-// we might store the access token in memory or in a secure cookie.
-// Since the backend sets HttpOnly cookies for refreshToken,
-// and returns accessToken in JSON, we need to handle it.
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  /** Patients only: the code they give a clinician to request access. */
+  shareCode?: string | null;
+}
 
-let currentAccessToken = '';
+export interface RegisterInput {
+  name: string;
+  email: string;
+  password: string;
+  role: 'PATIENT' | 'DOCTOR';
+  phone?: string;
+  specialization?: string;
+  clinicName?: string;
+  registrationNumber?: string;
+  city?: string;
+}
 
-export const setAccessToken = (token: string) => {
-  currentAccessToken = token;
+export const authApi = {
+  login: (email: string, password: string) =>
+    api.post('/auth/login', { email, password }).then((r) => r.data),
+
+  register: (input: RegisterInput) => api.post('/auth/register', input).then((r) => r.data),
+
+  me: () => api.get('/auth/me').then((r) => r.data),
+
+  refresh: () => api.post('/auth/refresh').then((r) => r.data),
+
+  logout: () => api.post('/auth/logout').then((r) => r.data),
 };
 
-authApi.interceptors.request.use(
-  (config) => {
-    if (currentAccessToken) {
-      config.headers.Authorization = `Bearer ${currentAccessToken}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-export default authApi;
+export { setAccessToken, getAccessToken, setAuthFailureHandler, apiErrorMessage };
+export default api;

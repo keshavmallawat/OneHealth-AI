@@ -1,136 +1,151 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Activity, ArrowRight, Lock, Mail, ShieldCheck, Stethoscope } from 'lucide-react';
+import { authApi, apiErrorMessage } from '../services/authApi';
 import { useAuth } from '../context/AuthContext';
-import authApi from '../services/authApi';
-import { Mail, Lock, AlertCircle, ArrowRight } from 'lucide-react';
+import { Alert, Button, Field, Input } from '../components/ui';
+
+/** Marketing-free brand panel: what the product is, in the product's own terms. */
+const BrandPanel: React.FC = () => (
+  <div className="hidden lg:flex flex-col justify-between bg-primary-ink p-12 text-white">
+    <div className="flex items-center gap-3">
+      <span className="h-10 w-10 rounded-md bg-white/10 grid place-items-center">
+        <Activity className="h-5 w-5 text-white" aria-hidden="true" />
+      </span>
+      <span className="text-lg font-semibold tracking-tight">
+        OneHealth <span className="font-normal text-white/60">AI</span>
+      </span>
+    </div>
+
+    <div className="max-w-md">
+      <h2 className="text-3xl font-semibold leading-tight tracking-tight text-white text-balance">
+        Your medical records, readable and in your control.
+      </h2>
+      <ul className="mt-7 space-y-4 text-sm text-white/75">
+        <li className="flex gap-3">
+          <ShieldCheck className="h-4.5 w-4.5 shrink-0 mt-0.5 text-white/50" aria-hidden="true" />
+          <span>
+            Lab values are extracted from your reports and compared against published reference
+            ranges — never guessed by a language model.
+          </span>
+        </li>
+        <li className="flex gap-3">
+          <Stethoscope className="h-4.5 w-4.5 shrink-0 mt-0.5 text-white/50" aria-hidden="true" />
+          <span>
+            Share a record with a clinician for a set period, see exactly who opened it, and
+            withdraw access at any time.
+          </span>
+        </li>
+      </ul>
+    </div>
+
+    <p className="text-xs text-white/40 leading-relaxed max-w-sm">
+      OneHealth AI provides informational decision support. It is not a diagnostic device and does
+      not replace advice from a qualified healthcare professional.
+    </p>
+  </div>
+);
 
 const Login: React.FC = () => {
+  const navigate = useNavigate();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
-  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError('');
-    setIsLoading(true);
-
+    setBusy(true);
     try {
-      const response = await authApi.post('/login', { email, password });
-      login(response.data.accessToken, response.data.user);
-      navigate('/dashboard');
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to login. Please check your credentials.');
+      const data = await authApi.login(email.trim(), password);
+      login(data.accessToken, data.user);
+      navigate(data.user?.role === 'DOCTOR' ? '/provider' : '/dashboard', { replace: true });
+    } catch (err) {
+      setError(apiErrorMessage(err, 'We could not sign you in.'));
     } finally {
-      setIsLoading(false);
+      setBusy(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-2xl shadow-xl">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Welcome Back
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Sign in to access your dashboard
-          </p>
-        </div>
-        
-        {error && (
-          <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-md flex items-start">
-            <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 mr-2 flex-shrink-0" />
-            <p className="text-sm text-red-700">{error}</p>
-          </div>
-        )}
+    <div className="min-h-screen grid lg:grid-cols-2">
+      <BrandPanel />
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="email">
-                Email Address
-              </label>
+      <div className="flex items-center justify-center bg-canvas px-6 py-12 sm:px-12">
+        <div className="w-full max-w-[420px]">
+          <div className="lg:hidden mb-10 flex items-center gap-3">
+            <span className="h-10 w-10 rounded-md bg-primary grid place-items-center">
+              <Activity className="h-5 w-5 text-white" aria-hidden="true" />
+            </span>
+            <span className="text-lg font-semibold tracking-tight text-ink">
+              OneHealth <span className="font-normal text-muted">AI</span>
+            </span>
+          </div>
+
+          <h1 className="text-2xl font-semibold text-ink tracking-tight">Sign in</h1>
+          <p className="mt-1.5 text-[15px] text-muted">
+            Access your health record, or your authorised patients.
+          </p>
+
+          <form onSubmit={submit} className="mt-7 space-y-4" noValidate>
+            {error && <Alert tone="error">{error}</Alert>}
+
+            <Field label="Email address" htmlFor="email">
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
+                <Mail
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint"
+                  aria-hidden="true"
+                />
+                <Input
                   id="email"
-                  name="email"
                   type="email"
                   autoComplete="email"
                   required
-                  className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
-                  placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  className="pl-9"
+                  placeholder="you@example.com"
                 />
               </div>
-            </div>
+            </Field>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="password">
-                Password
-              </label>
+            <Field label="Password" htmlFor="password">
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
+                <Lock
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint"
+                  aria-hidden="true"
+                />
+                <Input
                   id="password"
-                  name="password"
                   type="password"
                   autoComplete="current-password"
                   required
-                  className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
-                  placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  className="pl-9"
+                  placeholder="••••••••"
                 />
               </div>
-            </div>
-          </div>
+            </Field>
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <input
-                id="remember-me"
-                name="remember-me"
-                type="checkbox"
-                className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-              />
-              <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
-                Remember me
-              </label>
-            </div>
-
-            <div className="text-sm">
-              <Link to="/forgot-password" className="font-medium text-primary hover:text-primary-dark">
+            <div className="flex justify-end">
+              <Link to="/forgot-password" className="text-[13px] font-medium text-primary hover:underline">
                 Forgot your password?
               </Link>
             </div>
-          </div>
 
-          <div>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="group relative w-full flex justify-center py-2.5 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {isLoading ? 'Signing in...' : 'Sign in'}
-              {!isLoading && <ArrowRight className="ml-2 h-5 w-5" />}
-            </button>
-          </div>
-        </form>
+            <Button type="submit" loading={busy} className="w-full mt-2" size="md">
+              Sign in
+              {!busy && <ArrowRight className="h-4 w-4" aria-hidden="true" />}
+            </Button>
+          </form>
 
-        <div className="mt-6 text-center">
-          <p className="text-sm text-gray-600">
-            Don't have an account?{' '}
-            <Link to="/register" className="font-medium text-primary hover:text-primary-dark">
-              Register now
+          <p className="mt-6 text-sm text-muted text-center">
+            Don’t have an account?{' '}
+            <Link to="/register" className="font-medium text-primary hover:underline">
+              Create one
             </Link>
           </p>
         </div>

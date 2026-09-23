@@ -1,27 +1,30 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, Home } from 'lucide-react';
+import { Activity, ArrowLeft } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Button } from '../components/ui';
 
 const NotFound: React.FC = () => {
+  const { user } = useAuth();
+  const home = !user ? '/login' : user.role === 'DOCTOR' ? '/provider' : '/dashboard';
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full text-center space-y-8">
-        <div>
-          <AlertTriangle className="mx-auto h-24 w-24 text-primary" />
-          <h2 className="mt-6 text-4xl font-extrabold text-gray-900">404</h2>
-          <p className="mt-2 text-lg text-gray-600">
-            Oops! The page you're looking for doesn't exist.
-          </p>
-        </div>
-        <div className="mt-8">
-          <Link
-            to="/dashboard"
-            className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
-          >
-            <Home className="mr-2 h-5 w-5" />
-            Go back home
-          </Link>
-        </div>
+    <div className="flex min-h-screen items-center justify-center bg-canvas px-4">
+      <div className="w-full max-w-md text-center">
+        <span className="mx-auto mb-6 flex h-11 w-11 items-center justify-center rounded-md bg-primary">
+          <Activity className="h-5 w-5 text-white" aria-hidden="true" />
+        </span>
+        <p className="eyebrow">Error 404</p>
+        <h1 className="mt-2 text-xl font-semibold text-ink">This page does not exist</h1>
+        <p className="mt-2 text-sm text-muted">
+          The link may be out of date, or the record may have been removed.
+        </p>
+        <Link to={home} className="mt-7 inline-block">
+          <Button variant="secondary">
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            Back to {user ? 'your dashboard' : 'sign in'}
+          </Button>
+        </Link>
       </div>
     </div>
   );

@@ -1,89 +1,53 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
-import { Mail, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Activity, ArrowLeft, Mail } from 'lucide-react';
+import { Alert, Panel } from '../components/ui';
 
-const ForgotPassword: React.FC = () => {
-  const [email, setEmail] = useState('');
-  const [isSubmitted, setIsSubmitted] = useState(false);
+/**
+ * Password reset is not implemented in this build.
+ *
+ * Saying so plainly is deliberate: a screen that pretends to send a reset email
+ * and silently does nothing is worse than one that tells the truth.
+ */
+const ForgotPassword: React.FC = () => (
+  <div className="flex min-h-screen items-center justify-center bg-canvas px-4 py-12">
+    <div className="w-full max-w-md">
+      <div className="mb-8 flex items-center gap-2.5">
+        <span className="grid h-8 w-8 place-items-center rounded-md bg-primary">
+          <Activity className="h-4.5 w-4.5 text-white" aria-hidden="true" />
+        </span>
+        <span className="text-[15px] font-semibold tracking-tight text-ink">
+          OneHealth <span className="font-normal text-muted">AI</span>
+        </span>
+      </div>
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // In a real app, you would call an API here
-    // e.g. await authApi.post('/forgot-password', { email });
-    setIsSubmitted(true);
-  };
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-2xl shadow-xl">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Reset Password
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            {isSubmitted 
-              ? "We've sent a password reset link to your email."
-              : "Enter your email address and we'll send you a link to reset your password."}
-          </p>
+      <Panel className="p-6">
+        <div className="mb-4 flex items-center gap-2.5">
+          <Mail className="h-4.5 w-4.5 text-muted" aria-hidden="true" />
+          <h1 className="text-base font-semibold text-ink">Password reset</h1>
         </div>
 
-        {!isSubmitted ? (
-          <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="email">
-                Email Address
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-            </div>
+        <Alert tone="info" title="Not available in this build">
+          Self-service password reset needs an outbound email service, which this deployment does
+          not have configured. Rather than showing a form that silently does nothing, we are telling
+          you directly.
+        </Alert>
 
-            <div>
-              <button
-                type="submit"
-                className="group relative w-full flex justify-center py-2.5 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
-              >
-                Send Reset Link
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </button>
-            </div>
-          </form>
-        ) : (
-          <div className="mt-8">
-            <Link
-              to="/login"
-              className="group relative w-full flex justify-center py-2.5 px-4 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
-            >
-              <ArrowLeft className="mr-2 h-5 w-5" />
-              Back to Login
-            </Link>
-          </div>
-        )}
+        <p className="mt-4 text-sm text-ink-soft">
+          If you cannot sign in, ask whoever administers this deployment to reset your password
+          against the database.
+        </p>
 
-        {!isSubmitted && (
-          <div className="mt-6 text-center">
-            <Link to="/login" className="font-medium text-sm text-primary hover:text-primary-dark flex items-center justify-center">
-              <ArrowLeft className="mr-1 h-4 w-4" />
-              Back to Login
-            </Link>
-          </div>
-        )}
-      </div>
+        <Link
+          to="/login"
+          className="mt-6 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          Back to sign in
+        </Link>
+      </Panel>
     </div>
-  );
-};
+  </div>
+);
 
 export default ForgotPassword;

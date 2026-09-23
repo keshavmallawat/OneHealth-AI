@@ -1,79 +1,89 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import authApi, { setAccessToken } from '../services/authApi';
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-}
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
+import { authApi, setAccessToken, getAccessToken, setAuthFailureHandler } from '../services/authApi';
+import type { AuthUser } from '../services/authApi';
 
 interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
   loading: boolean;
-  login: (token: string, userData: User) => void;
+  login: (token: string, userData: AuthUser) => void;
   logout: () => Promise<void>;
   checkSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/** The non-secret companion to the HttpOnly refresh cookie. */
+function hasSessionHint(): boolean {
+  return document.cookie.split('; ').some((entry) => entry.startsWith('oh_session='));
+}
+
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const checkSession = async () => {
+  /**
+   * Restore the session on boot.
+   *  1. A stored access token is tried first (survives a page refresh).
+   *  2. Otherwise the HttpOnly refresh cookie is used to mint a new one — but
+   *     only when the readable `oh_session` hint says a session plausibly
+   *     exists. Without that check, every first visit by a signed-out user
+   *     fires a refresh that is certain to 401 and logs an error in the
+   *     console, which looks like a fault and is not one.
+   * Either way a failure just means "signed out" — never a crash.
+   */
+  const checkSession = useCallback(async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      // Let's assume the backend has a way to use the refresh token
-      // If we don't have access token, we could call refresh first
-      // But let's first check if there's a stored access token.
-      const storedToken = localStorage.getItem('accessToken');
-      if (storedToken) {
-        setAccessToken(storedToken);
-        const response = await authApi.get('/me');
-        setUser(response.data.user);
+      const stored = getAccessToken();
+      if (stored) {
+        setAccessToken(stored);
+        const { user: current } = await authApi.me();
+        setUser(current);
+      } else if (hasSessionHint()) {
+        const refreshed = await authApi.refresh();
+        setAccessToken(refreshed.accessToken);
+        const { user: current } = await authApi.me();
+        setUser(current);
       } else {
-        // Try refreshing
-        const refreshRes = await authApi.post('/refresh');
-        const newToken = refreshRes.data.accessToken;
-        setAccessToken(newToken);
-        localStorage.setItem('accessToken', newToken);
-        
-        const userRes = await authApi.get('/me');
-        setUser(userRes.data.user);
+        setUser(null);
+        setAccessToken('');
       }
-    } catch (error) {
-      console.log('Session check failed', error);
+    } catch {
       setUser(null);
       setAccessToken('');
-      localStorage.removeItem('accessToken');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     checkSession();
+  }, [checkSession]);
+
+  // If a refresh ever fails mid-session, drop straight back to signed-out state.
+  useEffect(() => {
+    setAuthFailureHandler(() => {
+      setUser(null);
+      setAccessToken('');
+    });
   }, []);
 
-  const login = (token: string, userData: User) => {
+  const login = useCallback((token: string, userData: AuthUser) => {
     setAccessToken(token);
-    localStorage.setItem('accessToken', token);
     setUser(userData);
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
-      await authApi.post('/logout');
-    } catch (error) {
-      console.error('Logout API failed', error);
+      await authApi.logout();
+    } catch {
+      // Signing out locally must succeed even if the API call does not.
     } finally {
       setUser(null);
       setAccessToken('');
-      localStorage.removeItem('accessToken');
     }
-  };
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, loading, login, logout, checkSession }}>
@@ -82,6 +92,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
