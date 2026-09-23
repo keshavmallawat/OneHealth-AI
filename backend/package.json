@@ -4,10 +4,16 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon src/index.ts",
+    "dev": "nodemon --watch src --ext ts --exec ts-node src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test tests/*.test.js || echo \"(no node tests yet - see ai-service/tests)\"",
+    "typecheck": "tsc --noEmit",
+    "seed": "ts-node --project tsconfig.seed.json prisma/seed.ts",
+    "migrate": "node scripts/apply-migrations.js",
+    "migrate:dev": "prisma migrate dev",
+    "prisma:generate": "prisma generate",
+    "setup": "prisma generate && node scripts/apply-migrations.js"
   },
   "keywords": [],
   "author": "",
@@ -15,19 +21,22 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1032.0",
     "@aws-sdk/s3-request-presigner": "^3.1032.0",
-    "@prisma/client": "^5.22.0",
+    "@prisma/client": "^6.19.3",
     "axios": "^1.15.1",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "firebase-admin": "^13.8.0",
     "helmet": "^8.1.0",
     "ioredis": "^5.10.1",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "@prisma/adapter-pg": "^6.19.3",
+    "pg": "^8.13.1",
+    "pdfkit": "^0.15.1",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -38,8 +47,14 @@
     "@types/multer": "^2.1.0",
     "@types/node": "^25.6.0",
     "nodemon": "^3.1.14",
-    "prisma": "^5.22.0",
+    "prisma": "^6.19.3",
     "ts-node": "^10.9.2",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "@types/pg": "^8.11.10",
+    "@types/pdfkit": "^0.13.9",
+    "@types/qrcode": "^1.5.5"
+  },
+  "prisma": {
+    "seed": "ts-node --project tsconfig.seed.json prisma/seed.ts"
   }
 }

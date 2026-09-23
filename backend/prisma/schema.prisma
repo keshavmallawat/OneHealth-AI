@@ -1,5 +1,14 @@
+// OneHealth AI — data model.
+//
+// engineType = "client" (the query compiler) plus a driver adapter means the
+// Prisma runtime is pure JavaScript: no platform-specific engine binary has to
+// be downloaded on the machine that runs the demo. Migrations are applied by
+// scripts/apply-migrations.js, which speaks plain SQL over `pg`, so the whole
+// stack starts on a laptop with no Prisma engine cache at all.
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  engineType      = "client"
+  previewFeatures = ["queryCompiler", "driverAdapters"]
 }
 
 datasource db {
@@ -7,66 +16,204 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id              String               @id @default(cuid())
-  name            String
-  emailHash       String               @unique
-  emailEncrypted  String
-  phoneHash       String?              @unique
-  phoneEncrypted  String?
-  passwordHash    String
-  role            Role                 @default(PATIENT)
-  abhaId          String?
-  bloodType       String?
-  createdAt       DateTime             @default(now())
+// ---------------------------------------------------------------------------
+// Identity
+// ---------------------------------------------------------------------------
 
-  // Relations
-  records         HealthRecord[]
-  accessTokens    DoctorAccessToken[]  @relation("DoctorTokens")
-  accessLogs      AccessLog[]
+model User {
+  id             String  @id @default(cuid())
+  name           String
+  emailHash      String  @unique
+  emailEncrypted String
+  phoneHash      String? @unique
+  phoneEncrypted String?
+  passwordHash   String
+  role           Role    @default(PATIENT)
+
+  // Health identity (patient). Every field is optional: the platform never
+  // invents demographic or clinical data, it only stores what the patient enters.
+  abhaId             String?
+  bloodType          String?
+  dateOfBirth        DateTime?
+  sex                String?
+  allergies          String[]  @default([])
+  chronicConditions  String[]  @default([])
+  emergencyName      String?
+  emergencyPhone     String?
+
+  // Share code: the identifier a patient gives a clinician so that the
+  // clinician can request access. Deliberately NOT the email, so doctors can
+  // never enumerate patients by guessing addresses.
+  shareCode      String? @unique
+
+  // Provider profile (doctor).
+  specialization     String?
+  clinicName         String?
+  registrationNumber String?
+  city               String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  records          HealthRecord[]
+  consentsAsPatient DoctorAccessToken[] @relation("PatientConsents")
+  consentsAsDoctor  DoctorAccessToken[] @relation("DoctorConsents")
+  shareSessions     ShareSession[]      @relation("PatientShareSessions")
+  claimedSessions   ShareSession[]      @relation("DoctorClaimedSessions")
+  accessLogs        AccessLog[]         @relation("ActorLogs")
+  logsAboutMe       AccessLog[]         @relation("SubjectLogs")
+  reminders         Reminder[]
+
+  @@index([role])
 }
+
+// ---------------------------------------------------------------------------
+// Records
+// ---------------------------------------------------------------------------
 
 model HealthRecord {
-  id          String         @id @default(cuid())
-  userId      String
-  type        RecordType
-  fileUrl     String
-  fileName    String
-  fileSize    Int
-  status      ProcessStatus  @default(PENDING)
-  tags        String[]
-  uploadedAt  DateTime       @default(now())
+  id       String     @id @default(cuid())
+  userId   String
+  type     RecordType
+  // Storage pointer. Format: "<driver>:<key>" e.g. "local:records/<userId>/<file>"
+  // or "s3:records/<userId>/<file>". Legacy rows without a prefix are s3.
+  fileUrl  String
+  fileName String
+  fileSize Int
+  mimeType String?
+  status   ProcessStatus @default(PENDING)
+  tags     String[]
 
-  // Relations
-  user        User           @relation(fields: [userId], references: [id])
-  accessLogs  AccessLog[]
+  // Clinical metadata the patient can correct — the extractor guesses, the
+  // patient owns the truth.
+  reportDate  DateTime?
+  labName     String?
+  notes       String?
+
+  // --- AI pipeline output ---
+  ocrText         String?
+  extractedData   Json?
+  aiSummary       String?
+  summarySource   String?
+  abnormalCount   Int      @default(0)
+  parameterCount  Int      @default(0)
+  processingError String?
+  processedAt     DateTime?
+
+  uploadedAt DateTime @default(now())
+
+  user       User        @relation(fields: [userId], references: [id])
+  accessLogs AccessLog[]
+
+  @@index([userId, uploadedAt])
+  @@index([userId, status])
 }
 
+// ---------------------------------------------------------------------------
+// Consent
+// ---------------------------------------------------------------------------
+
+/// One consent relationship between a patient and a clinician.
+/// The row is the whole lifecycle: requested -> approved/rejected -> revoked or
+/// expired. A doctor is authorised only while status = APPROVED, revoked =
+/// false and expiresAt is in the future; that check lives server-side in
+/// rbac.middleware.ts and is the only thing that grants cross-tenant read.
 model DoctorAccessToken {
-  id          String     @id @default(cuid())
-  token       String     @unique
-  patientId   String
-  doctorId    String
-  scope       String[]
-  expiresAt   DateTime
-  revoked     Boolean    @default(false)
-  createdAt   DateTime   @default(now())
+  id        String @id @default(cuid())
+  token     String @unique
+  patientId String
+  doctorId  String
 
-  // Relations
-  patient     User       @relation("DoctorTokens", fields: [patientId], references: [id])
+  status      ConsentStatus @default(PENDING)
+  scope       String[]      @default([])
+  purpose     String?
+  requestedBy String // "PATIENT" | "DOCTOR" — who initiated this relationship
+  origin      String        @default("DIRECT") // DIRECT | QR
+
+  expiresAt      DateTime
+  revoked        Boolean   @default(false)
+  decidedAt      DateTime?
+  revokedAt      DateTime?
+  lastAccessedAt DateTime?
+  accessCount    Int       @default(0)
+
+  createdAt DateTime @default(now())
+
+  patient User @relation("PatientConsents", fields: [patientId], references: [id])
+  doctor  User @relation("DoctorConsents", fields: [doctorId], references: [id])
+
+  @@index([patientId, status])
+  @@index([doctorId, status])
 }
 
-model AccessLog {
-  id              String         @id @default(cuid())
-  actorId         String
-  targetRecordId  String?
-  action          String
-  timestamp       DateTime       @default(now())
-  ipAddress       String?
+/// A short-lived QR/link handshake. The QR image encodes ONLY this opaque
+/// token — never any medical data — and redeeming it creates the consent row
+/// above. Expiry, single-use and revocation are all enforced server-side.
+model ShareSession {
+  id        String @id @default(cuid())
+  token     String @unique
+  patientId String
 
-  // Relations
-  actor           User           @relation(fields: [actorId], references: [id])
-  record          HealthRecord?  @relation(fields: [targetRecordId], references: [id])
+  scope     String[] @default([])
+  purpose   String?
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  revokedAt DateTime?
+
+  claimedByDoctorId String?
+  claimedAt         DateTime?
+  grantDurationHrs  Int      @default(72)
+
+  createdAt DateTime @default(now())
+
+  patient User  @relation("PatientShareSessions", fields: [patientId], references: [id])
+  doctor  User? @relation("DoctorClaimedSessions", fields: [claimedByDoctorId], references: [id])
+
+  @@index([patientId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Audit
+// ---------------------------------------------------------------------------
+
+/// Append-only audit trail. `actorId` is who did it; `patientId` is whose data
+/// it concerned. Storing both is what lets a patient see "Dr X opened your
+/// report" rather than only their own actions.
+model AccessLog {
+  id             String   @id @default(cuid())
+  actorId        String
+  patientId      String?
+  targetRecordId String?
+  action         String
+  detail         String?
+  timestamp      DateTime @default(now())
+  ipAddress      String?
+
+  actor   User          @relation("ActorLogs", fields: [actorId], references: [id])
+  patient User?         @relation("SubjectLogs", fields: [patientId], references: [id])
+  record  HealthRecord? @relation(fields: [targetRecordId], references: [id])
+
+  @@index([actorId, timestamp])
+  @@index([patientId, timestamp])
+}
+
+// ---------------------------------------------------------------------------
+// Reminders
+// ---------------------------------------------------------------------------
+
+model Reminder {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  notes     String?
+  dueAt     DateTime
+  completed Boolean  @default(false)
+  completedAt DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, dueAt])
 }
 
 enum Role {
@@ -80,6 +227,7 @@ enum RecordType {
   IMAGING
   PRESCRIPTION
   DISCHARGE
+  VACCINATION
   OTHER
 }
 
@@ -89,4 +237,12 @@ enum ProcessStatus {
   DONE
   FAILED
   DELETED
+}
+
+enum ConsentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REVOKED
+  EXPIRED
 }

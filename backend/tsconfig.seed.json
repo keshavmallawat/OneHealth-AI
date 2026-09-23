@@ -1,0 +1,8 @@
+{
+  "//": "Used only by `npm run seed`. The main tsconfig has rootDir=./src so the build output stays flat; the seed script lives in prisma/ and imports from src/, so it needs a wider root.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "."
+  },
+  "include": ["src/**/*", "prisma/**/*"]
+}
