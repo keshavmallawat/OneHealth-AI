@@ -1,8 +1,18 @@
-version: '3.8'
+# Local development services for OneHealth AI.
+#
+#   docker compose up -d      start
+#   docker compose ps         status
+#   docker compose down       stop (data is preserved in the named volume)
+#   docker compose down -v    stop AND delete all data
+#
+# PostgreSQL is published on 5433 so it cannot collide with a PostgreSQL server
+# already installed on the host (which normally owns 5432).
 
 services:
   postgres:
     image: postgres:16
+    container_name: onehealth-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
@@ -11,11 +21,26 @@ services:
       - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # `pg_isready` alone returns true before the DB finishes initialising on
+      # first boot, so query the actual database instead.
+      test: ["CMD-SHELL", "pg_isready -U postgres -d healthcareai -q && psql -U postgres -d healthcareai -c 'SELECT 1' > /dev/null 2>&1"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
+    container_name: onehealth-redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 volumes:
   pgdata:
