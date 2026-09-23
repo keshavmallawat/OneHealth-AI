@@ -1,15 +1,16 @@
 import jwt from 'jsonwebtoken';
+import { env } from '../config/env';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_jwt_key_min_32_chars';
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'another_super_secret_refresh_key';
+const JWT_SECRET = env.JWT_SECRET;
+const JWT_REFRESH_SECRET = env.JWT_REFRESH_SECRET;
 
 export class JwtService {
-  static generateAccessToken(userId: string, role: string): string {
-    return jwt.sign({ userId, role }, JWT_SECRET, { expiresIn: '15m' });
+  static generateAccessToken(userId: string, role: string, name?: string): string {
+    return jwt.sign({ userId, role, name }, JWT_SECRET, { expiresIn: env.ACCESS_TOKEN_TTL as any });
   }
 
   static generateRefreshToken(userId: string): string {
-    return jwt.sign({ userId }, JWT_REFRESH_SECRET, { expiresIn: '7d' });
+    return jwt.sign({ userId }, JWT_REFRESH_SECRET, { expiresIn: env.REFRESH_TOKEN_TTL as any });
   }
 
   static verifyAccessToken(token: string): any {

@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { z } from 'zod';
@@ -7,20 +7,67 @@ import { JwtService } from '../services/jwt.service';
 import { CryptoService } from '../services/crypto.service';
 import { RedisService } from '../services/redis.service';
 import { OtpService } from '../services/otp.service';
+import { prisma } from '../config/database';
+import { Role } from '@prisma/client';
+import { IdentityService } from '../services/identity.service';
 
-const prisma = new PrismaClient();
 
 const signupSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
+  name: z.string().trim().min(2, 'Please enter your full name').max(80),
   email: z.string().email('Invalid email format'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-  phone: z.string().optional()
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .max(128, 'Password is too long')
+    .refine((v) => /[a-zA-Z]/.test(v) && /[0-9]/.test(v), {
+      message: 'Password must contain at least one letter and one number',
+    }),
+  phone: z.string().trim().min(6).max(20).optional(),
+  // Only these two roles are self-registerable. ADMIN is never granted here,
+  // so the enum is the guard rather than a filter applied afterwards.
+  role: z.enum(['PATIENT', 'DOCTOR']).default('PATIENT'),
+  specialization: z.string().trim().max(80).optional(),
+  clinicName: z.string().trim().max(120).optional(),
+  registrationNumber: z.string().trim().max(60).optional(),
+  city: z.string().trim().max(80).optional(),
 });
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email format'),
   password: z.string().min(1, 'Password is required')
 });
+
+
+/**
+ * Refresh-token cookie, plus a readable hint cookie.
+ *
+ * The refresh token itself stays HttpOnly so JavaScript can never read it. The
+ * hint carries no secret — it only tells the SPA that a session probably
+ * exists, so a first visit by a signed-out user does not fire a doomed refresh
+ * request and log a 401 in the console.
+ */
+const REFRESH_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
+
+function setSessionCookies(res: Response, refreshToken: string) {
+  const secure = process.env.NODE_ENV === 'production';
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true,
+    secure,
+    sameSite: 'strict',
+    maxAge: REFRESH_MAX_AGE,
+  });
+  res.cookie('oh_session', '1', {
+    httpOnly: false,
+    secure,
+    sameSite: 'strict',
+    maxAge: REFRESH_MAX_AGE,
+  });
+}
+
+function clearSessionCookies(res: Response) {
+  res.clearCookie('refreshToken');
+  res.clearCookie('oh_session');
+}
 
 export class AuthController {
   
@@ -31,7 +78,10 @@ export class AuthController {
         return res.status(400).json({ error: parsed.error.flatten() });
       }
 
-      const { name, email, password, phone } = parsed.data;
+      const {
+        name, email, password, phone, role,
+        specialization, clinicName, registrationNumber, city,
+      } = parsed.data;
 
       const emailHash = CryptoService.hash(email);
       const emailEncrypted = CryptoService.encrypt(email);
@@ -46,7 +96,7 @@ export class AuthController {
       // Check if user already exists
       const existingUser = await prisma.user.findUnique({ where: { emailHash } });
       if (existingUser) {
-        return res.status(409).json({ error: 'Email already in use' });
+        return res.status(409).json({ error: 'An account with this email already exists.' });
       }
 
       const passwordHash = await bcrypt.hash(password, 12);
@@ -59,20 +109,27 @@ export class AuthController {
           phoneHash,
           phoneEncrypted,
           passwordHash,
+          role: role as Role,
+          // Patients get a share code at signup so they can hand it to a
+          // clinician without exposing their email address.
+          shareCode: role === 'PATIENT' ? await IdentityService.generateShareCode() : null,
+          ...(role === 'DOCTOR'
+            ? {
+                specialization: specialization || null,
+                clinicName: clinicName || null,
+                registrationNumber: registrationNumber || null,
+                city: city || null,
+              }
+            : {}),
         }
       });
 
       // Generate tokens
-      const accessToken = JwtService.generateAccessToken(user.id, user.role);
+      const accessToken = JwtService.generateAccessToken(user.id, user.role, user.name);
       const refreshToken = JwtService.generateRefreshToken(user.id);
 
       // Set cookie
-      res.cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-      });
+      setSessionCookies(res, refreshToken);
 
       return res.status(201).json({
         message: 'User registered successfully',
@@ -81,12 +138,13 @@ export class AuthController {
           id: user.id,
           name: user.name,
           email, // return plaintext to client
-          role: user.role
+          role: user.role,
+          shareCode: user.shareCode,
         }
       });
     } catch (err: any) {
       console.error("REGISTER ERROR:", err);
-      return res.status(500).json({ error: err.message || "Server error" });
+      return res.status(500).json({ error: "Service temporarily unavailable. Please try again." });
     }
   }
 
@@ -111,15 +169,10 @@ export class AuthController {
         return res.status(401).json({ error: 'Invalid credentials' });
       }
 
-      const accessToken = JwtService.generateAccessToken(user.id, user.role);
+      const accessToken = JwtService.generateAccessToken(user.id, user.role, user.name);
       const refreshToken = JwtService.generateRefreshToken(user.id);
 
-      res.cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60 * 1000
-      });
+      setSessionCookies(res, refreshToken);
 
       return res.json({
         message: 'Login successful',
@@ -128,12 +181,13 @@ export class AuthController {
           id: user.id,
           name: user.name,
           email: CryptoService.decrypt(user.emailEncrypted),
-          role: user.role
+          role: user.role,
+          shareCode: user.shareCode,
         }
       });
     } catch (err: any) {
       console.error("LOGIN ERROR:", err);
-      return res.status(500).json({ error: err.message || "Server error" });
+      return res.status(500).json({ error: "Service temporarily unavailable. Please try again." });
     }
   }
 
@@ -141,6 +195,7 @@ export class AuthController {
     try {
       const { refreshToken } = req.cookies;
       if (!refreshToken) {
+        clearSessionCookies(res);
         return res.status(401).json({ error: 'No refresh token provided' });
       }
 
@@ -153,6 +208,7 @@ export class AuthController {
       try {
         payload = JwtService.verifyRefreshToken(refreshToken);
       } catch (err) {
+        clearSessionCookies(res);
         return res.status(401).json({ error: 'Invalid or expired refresh token' });
       }
 
@@ -165,15 +221,10 @@ export class AuthController {
       await RedisService.blacklistToken(refreshToken, 7 * 24 * 60 * 60);
 
       // Issue new tokens
-      const newAccessToken = JwtService.generateAccessToken(user.id, user.role);
+      const newAccessToken = JwtService.generateAccessToken(user.id, user.role, user.name);
       const newRefreshToken = JwtService.generateRefreshToken(user.id);
 
-      res.cookie('refreshToken', newRefreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60 * 1000
-      });
+      setSessionCookies(res, newRefreshToken);
 
       return res.json({
         message: 'Token refreshed',
@@ -181,7 +232,7 @@ export class AuthController {
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ error: 'Internal server error' });
+      return res.status(500).json({ error: 'Service temporarily unavailable. Please try again.' });
     }
   }
 
@@ -190,12 +241,12 @@ export class AuthController {
       const { refreshToken } = req.cookies;
       if (refreshToken) {
         await RedisService.blacklistToken(refreshToken, 7 * 24 * 60 * 60);
-        res.clearCookie('refreshToken');
       }
+      clearSessionCookies(res);
       return res.json({ message: 'Logged out successfully' });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ error: 'Internal server error' });
+      return res.status(500).json({ error: 'Service temporarily unavailable. Please try again.' });
     }
   }
 
@@ -225,7 +276,7 @@ export class AuthController {
       return res.json({ message: 'OTP sent successfully' });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ error: 'Internal server error' });
+      return res.status(500).json({ error: 'Service temporarily unavailable. Please try again.' });
     }
   }
 
@@ -276,15 +327,10 @@ export class AuthController {
       }
 
       // Generate tokens
-      const accessToken = JwtService.generateAccessToken(user.id, user.role);
+      const accessToken = JwtService.generateAccessToken(user.id, user.role, user.name);
       const refreshToken = JwtService.generateRefreshToken(user.id);
 
-      res.cookie('refreshToken', refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60 * 1000
-      });
+      setSessionCookies(res, refreshToken);
 
       return res.json({
         message: 'OTP verified successfully',
@@ -297,7 +343,7 @@ export class AuthController {
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ error: 'Internal server error' });
+      return res.status(500).json({ error: 'Service temporarily unavailable. Please try again.' });
     }
   }
 
@@ -312,12 +358,13 @@ export class AuthController {
           id: user.id,
           name: user.name,
           email: CryptoService.decrypt(user.emailEncrypted),
-          role: user.role
+          role: user.role,
+          shareCode: user.shareCode,
         }
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ error: 'Internal server error' });
+      return res.status(500).json({ error: 'Service temporarily unavailable. Please try again.' });
     }
   }
 }

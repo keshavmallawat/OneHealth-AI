@@ -1,10 +1,21 @@
 import crypto from 'crypto';
-import dotenv from 'dotenv';
+import { env } from '../config/env';
 
-dotenv.config();
+/**
+ * AES-256-GCM requires a 32-byte key.
+ *
+ * A configured value that is already exactly 32 bytes is used as-is, which keeps
+ * any previously encrypted data readable. Any other length is stretched with
+ * SHA-256 so a mis-sized secret degrades into a valid key instead of throwing
+ * an opaque error at the first login attempt.
+ */
+function deriveKey(secret: string): Buffer {
+  const raw = Buffer.from(secret, 'utf8');
+  return raw.length === 32 ? raw : crypto.createHash('sha256').update(secret).digest();
+}
 
-const ENCRYPTION_KEY = process.env.PII_ENCRYPTION_KEY || 'default_32_byte_key_for_dev_only!'; // Must be 32 bytes
-const HMAC_SECRET = process.env.PII_HMAC_SECRET || 'default_hmac_secret_for_dev';
+const ENCRYPTION_KEY = deriveKey(env.PII_ENCRYPTION_KEY);
+const HMAC_SECRET = env.PII_HMAC_SECRET;
 const ALGORITHM = 'aes-256-gcm';
 
 export class CryptoService {
@@ -22,7 +33,7 @@ export class CryptoService {
    */
   static encrypt(text: string): string {
     const iv = crypto.randomBytes(12);
-    const cipher = crypto.createCipheriv(ALGORITHM, Buffer.from(ENCRYPTION_KEY), iv);
+    const cipher = crypto.createCipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
 
     let encrypted = cipher.update(text, 'utf8', 'hex');
     encrypted += cipher.final('hex');
@@ -48,7 +59,7 @@ export class CryptoService {
     const iv = Buffer.from(ivHex, 'hex');
     const authTag = Buffer.from(authTagHex, 'hex');
 
-    const decipher = crypto.createDecipheriv(ALGORITHM, Buffer.from(ENCRYPTION_KEY), iv);
+    const decipher = crypto.createDecipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
     decipher.setAuthTag(authTag);
 
     let decrypted = decipher.update(ciphertext, 'hex', 'utf8');

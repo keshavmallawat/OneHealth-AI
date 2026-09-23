@@ -5,7 +5,10 @@ import { rateLimit } from '../middleware/rate-limit.middleware';
 const router = Router();
 
 const loginLimiter = rateLimit(5, 60, 'rl:login', (req) => req.ip);
-const signupLimiter = rateLimit(3, 60, 'rl:signup', (req) => req.ip);
+// 10/minute per IP still stops automated account creation, but does not lock
+// out a shared network (a clinic, a lab, a classroom) where several people
+// legitimately register within a minute of each other.
+const signupLimiter = rateLimit(10, 60, 'rl:signup', (req) => req.ip);
 const otpSendLimiter = rateLimit(3, 300, 'rl:otp_send', (req) => req.body.identifier || req.ip);
 const otpVerifyLimiter = rateLimit(5, 300, 'rl:otp_verify', (req) => req.body.identifier || req.ip);
 
