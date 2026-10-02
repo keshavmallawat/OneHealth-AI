@@ -15,32 +15,6 @@ A patient-centred health-record platform. A patient uploads a medical report; th
 - **Trends and comparison.** Per-parameter time series and report-to-report diffs, with deterministic observations.
 - **Tested end to end.** pytest for extraction, NER and assistant safety, plus two smoke suites (137 assertions) that call the API directly, so a pass proves the *server* enforces authorisation rather than the UI hiding a button.
 
-## Screenshots
-
-All screenshots use the synthetic demo account; no real patient data appears anywhere.
-
-<p align="center">
-  <img src="docs/screenshots/dashboard.png" alt="Patient dashboard with latest findings and clinician access request" width="100%">
-</p>
-
-<details>
-<summary>More screens</summary>
-<br>
-
-| Report with flagged values | Trends against the reference range |
-| :---: | :---: |
-| <img src="docs/screenshots/report-detail.png" alt="Report detail with key findings" width="480"> | <img src="docs/screenshots/trends.png" alt="Trend chart for ALT with reference band" width="480"> |
-
-| Report-to-report comparison | Grounded assistant |
-| :---: | :---: |
-| <img src="docs/screenshots/compare.png" alt="Comparison of two reports" width="480"> | <img src="docs/screenshots/assistant.png" alt="Assistant answers grounded in the patient's reports" width="480"> |
-
-| Consent and sharing (patient) | Read-only clinician view |
-| :---: | :---: |
-| <img src="docs/screenshots/sharing.png" alt="Patient approves clinician access" width="480"> | <img src="docs/screenshots/clinician.png" alt="Clinician sees only the shared records" width="480"> |
-
-</details>
-
 ## Design decisions
 
 **1. The LLM never reads the numbers.** A language model asked to read values off a report will confidently invent them. Extraction is fully deterministic: alias matching, unit normalisation, then comparison against intervals in `ai-service/app/data/reference_ranges.py`. The LLM (`gpt-4o-mini` by default) is used only to *phrase* findings that were already extracted. When it is unavailable, a deterministic generator writes the summary instead.
@@ -111,7 +85,6 @@ cd ai-service
 python -m venv .venv
 .venv\Scripts\activate    # Windows  (macOS/Linux: source .venv/bin/activate)
 pip install -r requirements.txt
-python -m spacy download en_core_web_sm    # language model for the clinical NER layer
 uvicorn app.main:app --reload --port 8001
 ```
 
@@ -189,6 +162,8 @@ The smoke suites drive a running stack: register, login, upload, AI processing, 
 
 - [`docs/DEMO-SCRIPT.md`](docs/DEMO-SCRIPT.md) — minute-by-minute demo runbook, including fallbacks if something breaks.
 - [`docs/FINAL-FEATURE-MATRIX.md`](docs/FINAL-FEATURE-MATRIX.md) — what is complete, partial and absent, stated feature by feature.
+- [`docs/DEMO-CHECKLIST.md`](docs/DEMO-CHECKLIST.md) — pre-demo checks.
+- [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md) — verified status of the stack.
 - `docs/presentation/` — capstone presentation material.
 
 ## Repository layout
