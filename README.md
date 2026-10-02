@@ -15,6 +15,17 @@ A patient-centred health-record platform. A patient uploads a medical report; th
 - **Trends and comparison.** Per-parameter time series and report-to-report diffs, with deterministic observations.
 - **Tested end to end.** pytest for extraction, NER and assistant safety, plus two smoke suites (137 assertions) that call the API directly, so a pass proves the *server* enforces authorisation rather than the UI hiding a button.
 
+## Screenshots
+
+<p align="center"><img src="docs/screenshots/dashboard.png" width="900" alt="Patient dashboard"></p>
+<p align="center"><sub>Patient dashboard</sub></p>
+
+<table>
+<tr><td align="center"><img src="docs/screenshots/report-detail.png" width="480" alt="Report detail"><br><sub>Report detail</sub></td><td align="center"><img src="docs/screenshots/trends.png" width="480" alt="Trends"><br><sub>Trends</sub></td></tr>
+<tr><td align="center"><img src="docs/screenshots/compare.png" width="480" alt="Compare reports"><br><sub>Compare reports</sub></td><td align="center"><img src="docs/screenshots/assistant.png" width="480" alt="Grounded assistant"><br><sub>Grounded assistant</sub></td></tr>
+<tr><td align="center"><img src="docs/screenshots/sharing.png" width="480" alt="Sharing"><br><sub>Sharing</sub></td><td align="center"><img src="docs/screenshots/clinician.png" width="480" alt="Clinician view"><br><sub>Clinician view</sub></td></tr>
+</table>
+
 ## Design decisions
 
 **1. The LLM never reads the numbers.** A language model asked to read values off a report will confidently invent them. Extraction is fully deterministic: alias matching, unit normalisation, then comparison against intervals in `ai-service/app/data/reference_ranges.py`. The LLM (`gpt-4o-mini` by default) is used only to *phrase* findings that were already extracted. When it is unavailable, a deterministic generator writes the summary instead.
@@ -85,6 +96,7 @@ cd ai-service
 python -m venv .venv
 .venv\Scripts\activate    # Windows  (macOS/Linux: source .venv/bin/activate)
 pip install -r requirements.txt
+python -m spacy download en_core_web_sm    # language model for the clinical NER layer
 uvicorn app.main:app --reload --port 8001
 ```
 
