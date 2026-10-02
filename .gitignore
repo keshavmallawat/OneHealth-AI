@@ -61,3 +61,7 @@ scripts/*.log
 # Local run artefacts the wildcards above miss by name.
 scripts/setup-log-copy.txt
 scripts/git-audit.txt
+
+# Test output
+frontend/test-results/
+frontend/playwright-report/
