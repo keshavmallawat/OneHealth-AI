@@ -1,4 +1,4 @@
-# OneHealth AI — Pre-Evaluation Status
+# OneHealth AI — Project Status
 
 Prepared 2 September 2026. Everything below was verified against a running
 stack, not asserted from the code.
