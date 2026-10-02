@@ -174,8 +174,6 @@ The smoke suites drive a running stack: register, login, upload, AI processing, 
 
 - [`docs/DEMO-SCRIPT.md`](docs/DEMO-SCRIPT.md) — minute-by-minute demo runbook, including fallbacks if something breaks.
 - [`docs/FINAL-FEATURE-MATRIX.md`](docs/FINAL-FEATURE-MATRIX.md) — what is complete, partial and absent, stated feature by feature.
-- [`docs/DEMO-CHECKLIST.md`](docs/DEMO-CHECKLIST.md) — pre-demo checks.
-- [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md) — verified status of the stack.
 - `docs/presentation/` — capstone presentation material.
 
 ## Repository layout
