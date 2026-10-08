@@ -1,0 +1,91 @@
+# Whole stack in containers: database, cache, AI service, API and web app.
+#
+#   cp infra/.env.prod.example infra/.env.prod      # then fill in the secrets
+#   docker compose -f infra/docker-compose.prod.yml --env-file infra/.env.prod up -d --build
+#   open http://localhost:8080
+#
+# No secret is stored in this file: every one is read from infra/.env.prod,
+# and compose refuses to start if a required one is missing.
+name: onehealth
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: onehealth
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: healthcareai
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U onehealth -d healthcareai -q"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  ai:
+    build:
+      context: ../ai-service
+      args:
+        WITH_SPACY: "false"
+    restart: unless-stopped
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8001/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ../backend
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      ai: { condition: service_healthy }
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      FRONTEND_URL: ${PUBLIC_URL:-http://localhost:8080}
+      DATABASE_URL: postgresql://onehealth:${POSTGRES_PASSWORD}@postgres:5432/healthcareai
+      REDIS_URL: redis://redis:6379
+      REDIS_ENABLED: "true"
+      AI_SERVICE_URL: http://ai:8001
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET}
+      PII_ENCRYPTION_KEY: ${PII_ENCRYPTION_KEY:?set PII_ENCRYPTION_KEY}
+      PII_HMAC_SECRET: ${PII_HMAC_SECRET:?set PII_HMAC_SECRET}
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      LOCAL_STORAGE_PATH: /app/storage
+      AWS_REGION: ${AWS_REGION:-ap-south-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME:-healthcare-ai-records}
+    volumes:
+      - uploads:/app/storage
+
+  web:
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${WEB_PORT:-8080}:80"
+
+volumes:
+  pgdata:
+  uploads:

@@ -24,6 +24,7 @@ env/
 # ...but the templates ARE documentation and must be committed.
 !.env.example
 !**/.env.example
+!**/.env.prod.example
 
 # General
 .DS_Store
