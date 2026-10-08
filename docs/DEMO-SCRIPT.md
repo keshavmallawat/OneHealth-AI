@@ -37,6 +37,11 @@ the API and the AI service, so "Secure connection" is a live claim.
 - **Needs your attention** — assembled only from real state: a pending clinician
   request, values outside range, overdue reminders, failed analyses. If there is
   nothing to say, the panel does not appear.
+- **Worth watching** — the newest value of each test against published
+  thresholds, with the values, dates and guideline shown. If nothing crosses a
+  threshold the panel says so. It is labelled as not a diagnosis. To show it
+  populated, upload `sample-data/sample-blood-report-abnormal.pdf` so it becomes
+  the newest report.
 - The identity card, the share code, and the access-history panel.
 
 ### 3. Open an analysed report (90s) — *the core of the project*
@@ -59,7 +64,7 @@ Open **sample-blood-report-abnormal.pdf**.
   OCR), characters extracted, when it was analysed.
 
 ### 4. Live upload (60s)
-Dashboard → drop in `OneHealth-Demo-Report.pdf` → Upload and analyse.
+Dashboard → drop in `OneHealth-Demo-Report.pdf` → Upload and analyse. (Optional: drop two or three sample reports at once to show the upload queue — each file reports its own result.)
 
 Watch the status go **Queued → Analysing → Analysed** without a refresh. Open it:
 14 values, 7 flagged. Refresh the browser to show it is persisted in PostgreSQL,
@@ -115,7 +120,12 @@ Then ask **"Do I have diabetes?"** — the assistant refuses, and explains why.
 > around it. And the context is assembled from this patient's rows only — the AI
 > service has no database access at all."*
 
-### 9. Export (20s)
+### 9. Emergency card (30s)
+Profile → **Emergency card** → tick the fields → **Create card**. Point out the QR
+is plain text readable by any phone camera with no sign-in, that it says the
+details are unverified, and that anyone holding the printout can read it.
+
+### 10. Export (20s)
 Dashboard → **Export summary** → a PDF built only from stored values, with the
 disclaimer on page one and "Not provided" wherever the patient has entered
 nothing.
@@ -157,6 +167,12 @@ Because it would have to be invented. Every number in this product traces to a
 document the patient uploaded; a composite score would not, and inventing
 clinical signals is the failure mode the whole design avoids.
 
+**"How accurate is it on scans?"**
+Measured on 1,090 synthetic values (`docs/EVALUATION.md`): digital PDFs 100%,
+clear scans 97.3% value accuracy, phone-photo quality 58.7% with 7.2% silent
+errors. The UI warns on scans and shows doubtful values as Not compared. The
+benchmark is synthetic and written by the team; say so before being asked.
+
 **"What isn't finished?"**
 Password reset (needs a mail service), OTP delivery (console stub), ABDM
 integration, and any notification delivery. All four are named in
@@ -174,5 +190,5 @@ integration, and any notification delivery. All four are named in
 | The database will not start | Double-click `SETUP-DATABASE.bat`, then `RUN-SETUP.bat`. |
 
 Fallback: `node scripts/smoke-test.js` and `node scripts/smoke-test-consent.js`
-exercise the entire stack from the command line and print 42 and 95 passing
-assertions respectively — a working demonstration even without the browser.
+exercise the entire stack from the command line and print 42, 95 and 29 passing
+assertions (`smoke-test-features.js` covers watch indicators and the emergency card) — a working demonstration even without the browser.

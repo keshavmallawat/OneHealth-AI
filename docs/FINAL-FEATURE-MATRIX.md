@@ -1,6 +1,6 @@
 # OneHealth AI — Final Feature Matrix
 
-Last verified: 2 September 2026, against a running stack
+Last verified: 8 October 2026, against a running stack
 (PostgreSQL 16 · Node/Express API · Python FastAPI AI service · React frontend).
 
 ## How to read this table
@@ -19,7 +19,8 @@ not, by itself, evidence of anything.
 
 "Tested" names the automated check. `core` = `scripts/smoke-test.js` (42 assertions),
 `consent` = `scripts/smoke-test-consent.js` (95 assertions),
-`ai` = `ai-service/tests` (15 assertions), `qa` = scripted browser walkthrough.
+`ai` = `ai-service/tests` (30 assertions), `features` = `scripts/smoke-test-features.js` (29 assertions),
+`bench` = `ai-service/scripts/benchmark.py` (1,090 synthetic values), `qa` = scripted browser walkthrough.
 
 ---
 
@@ -47,6 +48,7 @@ not, by itself, evidence of anything.
 | Profile validation (blood type, future date of birth, ABHA format) | COMPLETE | inline errors | zod | — | consent | "Invalid values are refused by the server, not only by the form." |
 | Share code, and re-issuing it | COMPLETE | `Profile.tsx`, `Sharing.tsx` | `identity.service` | `User.shareCode` | consent | "A patient identifier that is not their email, so clinicians cannot enumerate patients — and it can be rotated." |
 | ABHA ID as profile metadata | PARTIAL | `Profile.tsx` | `users.controller` | `User.abhaId` | consent | "Stored and validated as an identifier. **No ABDM integration** — nothing is exchanged with the national registry, and the UI says so." |
+| Emergency card (QR with patient-chosen fields) | COMPLETE | `Profile.tsx` | `users.controller` `getEmergencyCard` | none stored | features | "The patient ticks which of their own profile fields go on the card; the QR holds plain text readable offline, says it is unverified, and creating one is audited. Anyone holding the printout can read it." |
 
 ## 3. Records and the AI pipeline
 
@@ -54,6 +56,7 @@ not, by itself, evidence of anything.
 |---|---|---|---|---|---|---|
 | Upload PDF / JPEG / PNG / WebP / TIFF | COMPLETE | `UploadPanel.tsx` | `records.controller` | `HealthRecord` | core | "Type and size are validated in the browser and again on the server." |
 | Secure storage with a driver abstraction | COMPLETE | — | `storage.service` | pointer `"<driver>:<key>"` | core | "Local encrypted disk by default; the S3 implementation is intact behind the same interface." |
+| Multi-file upload (up to 10) | COMPLETE | `UploadPanel.tsx` | `records.controller` | `HealthRecord` | core | "Files are queued, validated one by one, and uploaded in turn; one failure does not stop the rest. ZIP upload is not built." |
 | Authenticated document access only | COMPLETE | blob fetch | `streamFile` | — | core, consent | "There is no unauthenticated URL to an uploaded document; ownership is re-checked on every request." |
 | PDF text-layer extraction | COMPLETE | — | AI service (PyMuPDF) | — | core, ai | "A digital PDF is read from its text layer, so the primary demo path needs no OCR engine at all." |
 | OCR for scans and images | COMPLETE | — | AI service (Tesseract) | — | core, qa | "Images and scanned PDFs go through Tesseract; the seeded PNG report is extracted this way." |
@@ -107,6 +110,8 @@ not, by itself, evidence of anything.
 | Deterministic observations | COMPLETE | observation panel | `insights.service` | — | consent | "increased / decreased / stable / newly abnormal / returned to range — arithmetic, not interpretation." |
 | Report-to-report comparison | COMPLETE | `Trends.tsx` | `compare` | — | consent | "A per-parameter diff of two reports, including tests newly added or not repeated." |
 | Honest empty state | COMPLETE | `Trends.tsx` | `message` | — | qa | "A single reading is not shown as a trend; the page says why." |
+| Watch indicators ("Worth watching") | COMPLETE | `Dashboard.tsx` | `indicators.service` | derived on read | features | "Latest value of each test compared with published thresholds (ADA, WHO, NCEP). Shows the exact values, dates and guideline used; carries a disclaimer; gives no treatment advice; blood pressure is stated as not assessed." |
+| OCR reliability notice and per-value check cue | COMPLETE | `ReportDetail.tsx` | `ner.py` `ocrUncertain` | `extractedData` | ai, bench | "Values from scans that look misread are shown as Not compared with a note, not as a confident flag." |
 | Health score | NOT IMPLEMENTED | — | — | — | — | "Deliberately absent: any single number here would be invented, and inventing clinical signals is the failure mode this project is built to avoid." |
 
 ## 7. Health assistant
@@ -159,7 +164,8 @@ not, by itself, evidence of anything.
 | Docker compose for the database | PARTIAL | `infra/docker-compose.yml` works; the default path is a self-contained local cluster needing no Docker or admin rights |
 | ABHA / ABDM integration | PLANNED | Only the identifier field exists. No registry calls, no consent-manager integration |
 | Mobile app / PWA | NOT IMPLEMENTED | The web UI is responsive down to a 390px viewport; it is not an installable PWA |
-| Production cloud deployment | NOT IMPLEMENTED | The project runs locally; no deployment pipeline is claimed |
+| Container files and whole-stack compose | PARTIAL | `backend/`, `ai-service/`, `frontend/` Dockerfiles, `infra/docker-compose.prod.yml`, `docs/DEPLOYMENT.md`. The compose file validates; **the images have not been built** |
+| Production cloud deployment | NOT IMPLEMENTED | The project runs locally; nothing is hosted |
 
 ---
 
@@ -169,10 +175,11 @@ not, by itself, evidence of anything.
 |---|---|---|
 | `scripts/smoke-test.js` — core pipeline | 42 | **42 passed** |
 | `scripts/smoke-test-consent.js` — consent, sharing, assistant, export | 95 | **95 passed** |
-| `ai-service/tests` — extraction and assistant safety | 15 | **15 passed** |
+| `scripts/smoke-test-features.js` — watch indicators, emergency card | 29 | **29 passed** |
+| `ai-service/tests` — extraction, OCR confusions, assistant safety | 30 | **30 passed** |
 | Frontend production build | — | **clean** (TypeScript + Vite) |
-| Backend typecheck and build | — | **clean** |
-| Browser walkthrough (desktop, tablet, 390px mobile) | 27 pages | **no console errors, no failed API calls, no horizontal overflow** |
-| Migration against a populated pre-existing database | — | **all rows preserved, re-run is a no-op** |
+| Backend typecheck | — | **clean** |
+| Accuracy benchmark (`docs/EVALUATION.md`) | 1,090 values | digital PDF 100% / 0 silent-wrong; light scan 97.3% value accuracy / 0 silent-wrong; phone-photo quality 58.7% value accuracy with **7.2% silent-wrong** (reported, not hidden) |
+| Browser walkthrough (desktop 1440px, mobile 390px) | dashboard, profile | no horizontal overflow |
 
-**Total: 152 automated assertions passing.**
+**Total: 196 automated assertions passing, plus the benchmark.**

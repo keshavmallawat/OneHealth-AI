@@ -13,7 +13,10 @@ A patient-centred health-record platform. A patient uploads a medical report; th
 - **Consent-based sharing.** Patients grant, approve and revoke clinician access; single-use QR share codes; every access is audit-logged.
 - **Grounded assistant.** Answers questions only from the patient's own results and refuses to diagnose.
 - **Trends and comparison.** Per-parameter time series and report-to-report diffs, with deterministic observations.
-- **Tested end to end.** pytest for extraction, NER and assistant safety, plus two smoke suites (137 assertions) that call the API directly, so a pass proves the *server* enforces authorisation rather than the UI hiding a button.
+- **Worth watching.** Newest value of each test checked against published guideline thresholds (ADA, WHO, NCEP), with the values, dates and guideline shown. Not a diagnosis, and no treatment advice.
+- **Emergency card.** A QR the patient builds from fields they choose; readable offline, labelled unverified.
+- **Measured accuracy.** A 1,090-value synthetic benchmark, including a degraded-scan group where silent errors are counted and reported (`docs/EVALUATION.md`).
+- **Tested end to end.** pytest for extraction, NER and assistant safety, plus three smoke suites (166 assertions) that call the API directly, so a pass proves the *server* enforces authorisation rather than the UI hiding a button.
 
 ## Screenshots
 
@@ -68,7 +71,7 @@ Each result carries a status (NORMAL / LOW / HIGH / UNKNOWN), a confidence score
 
 ## Quick start
 
-**Prerequisites:** Node.js 18+, Python 3.10+, PostgreSQL 14+ (local, or via `infra/docker-compose.yml`). Tesseract OCR is optional (only for images and scanned PDFs); Redis is optional (the API falls back to an in-process store).
+**Prerequisites:** Node.js 18+, Python 3.10–3.12 (the spaCy clinical-NER engine has no wheels for 3.13; the API still runs there on the rule-based engine), PostgreSQL 14+ (local, or via `infra/docker-compose.yml`). Tesseract OCR is optional (only for images and scanned PDFs); Redis is optional (the API falls back to an in-process store).
 
 ### 1. Database
 
@@ -138,11 +141,11 @@ All configuration is validated at boot in `backend/src/config/env.ts`; a bad val
 | Area | Routes |
 |---|---|
 | Auth | `POST /api/auth/register`, `login`, `refresh`, `logout`; `GET /api/auth/me` |
-| Records | `POST /api/records/upload`; `GET /api/records`, `/:id`, `/:id/file`, `/stats`, `/trends`, `/compare`, `/activity`, `/summary.pdf`; `POST /:id/reprocess`; `PATCH/DELETE /:id` |
+| Records | `POST /api/records/upload`; `GET /api/records`, `/:id`, `/:id/file`, `/stats`, `/trends`, `/indicators`, `/compare`, `/activity`, `/summary.pdf`; `POST /:id/reprocess`; `PATCH/DELETE /:id` |
 | Consent | `GET /api/consents`, `/directory`, `/patients`, `/patients/:id`; `POST /grant`, `/request`, `/:id/approve`, `/reject`, `/revoke` |
 | QR sharing | `POST /api/share/sessions`, `/api/share/redeem`; `POST /api/users/me/share-code/rotate` |
 | Assistant | `POST /api/assistant/ask` (grounded in the patient's own results) |
-| Other | `/api/users/me/profile`, `/api/reminders`, `GET /api/health` |
+| Other | `/api/users/me/profile`, `GET /api/users/me/emergency-card`, `/api/reminders`, `GET /api/health` |
 
 AI service: `POST /api/analyze`, `/api/ocr`, `/api/summarise`, `/api/assistant`; `GET /api/reference-ranges`, `/health`.
 
@@ -155,6 +158,8 @@ cd backend && npm run typecheck                        # backend types
 cd frontend && npm run build                           # typecheck + production build
 node scripts/smoke-test.js                             # core pipeline end to end (42 assertions)
 node scripts/smoke-test-consent.js                     # consent, sharing, assistant (95 assertions)
+node scripts/smoke-test-features.js                    # watch indicators, emergency card (29 assertions)
+cd ai-service && python scripts/benchmark.py           # accuracy and latency on synthetic reports (see docs/EVALUATION.md)
 ```
 
 The smoke suites drive a running stack: register, login, upload, AI processing, extraction assertions, document access control, cross-tenant authorisation, the full consent lifecycle, QR sharing, assistant grounding and refusals, trends, PDF export, reminders and rate limiting. They register accounts, so each waits out the signup rate-limit window by itself rather than the limiter being loosened for the test.
@@ -174,6 +179,16 @@ The smoke suites drive a running stack: register, login, upload, AI processing, 
 
 - [`docs/DEMO-SCRIPT.md`](docs/DEMO-SCRIPT.md) — minute-by-minute demo runbook, including fallbacks if something breaks.
 - [`docs/FINAL-FEATURE-MATRIX.md`](docs/FINAL-FEATURE-MATRIX.md) — what is complete, partial and absent, stated feature by feature.
+- [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md) — completion against the proposal and the plan, with the scoring rule and remaining work.
+- [`docs/SRS.md`](docs/SRS.md) — requirements, architecture and UML diagrams.
+- [`docs/USER-MANUAL.md`](docs/USER-MANUAL.md) — how to use each feature.
+- [`docs/EVALUATION.md`](docs/EVALUATION.md) — accuracy and latency benchmark, with its limits.
+- [`docs/ABLATION.md`](docs/ABLATION.md) — what each fail-safe prevents, with confidence intervals (`ai-service/scripts/ablation.py`).
+- [`docs/paper/`](docs/paper/) — draft research paper (LaTeX source and PDF).
+- [`docs/QA-SHEET.md`](docs/QA-SHEET.md) — likely evaluation questions with short, honest answers.
+- [`docs/LITERATURE-SURVEY.md`](docs/LITERATURE-SURVEY.md) — checked literature survey and research gap.
+- [`docs/SEM7-REPORT.md`](docs/SEM7-REPORT.md) — report chapters rewritten to match the system as built; [`docs/REPORT-CORRECTIONS.md`](docs/REPORT-CORRECTIONS.md) lists every correction; figures are in `docs/figures/`.
+- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — container deployment (files written, not yet built or hosted).
 - `docs/presentation/` — capstone presentation material.
 
 ## Repository layout
@@ -191,9 +206,9 @@ OneHealth-AI/
 
 ## Status and roadmap
 
-**Implemented:** report upload and analysis, consent-based clinician sharing, QR access grants, access-log viewer, grounded health assistant, trends with report comparison, PDF export, in-app reminders.
+**Implemented:** report upload and analysis, consent-based clinician sharing, QR access grants, access-log viewer, grounded health assistant, trends with report comparison, watch indicators, emergency card, PDF export, in-app reminders, container files for deployment.
 
-**Not implemented yet:** ABHA/ABDM integration (only the identifier field exists today), outbound delivery of reminder and consent notifications, password reset, and a production deployment pipeline. Setup scripts are Windows-first.
+**Not implemented yet:** ABHA/ABDM integration (only the identifier field exists today), outbound delivery of reminder and consent notifications, password reset, and a hosted deployment (the container files exist but have not been built). Scans photographed at phone quality are not reliable; see the evaluation report. Setup scripts are Windows-first.
 
 ## License
 
