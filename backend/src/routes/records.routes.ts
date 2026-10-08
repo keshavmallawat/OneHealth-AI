@@ -13,6 +13,7 @@ router.use(verifyToken);
 // --- Aggregates (declared before /:id so they are not captured by it) --------
 router.get('/stats', requireRole([Role.PATIENT]), RecordsController.getStats);
 router.get('/trends', requireRole([Role.PATIENT]), RecordsController.getTrends);
+router.get('/indicators', requireRole([Role.PATIENT]), RecordsController.getIndicators);
 router.get('/compare', requireRole([Role.PATIENT]), RecordsController.compare);
 router.get('/activity', requireRole([Role.PATIENT]), RecordsController.getActivity);
 router.get('/summary.pdf', requireRole([Role.PATIENT]), RecordsController.exportSummary);

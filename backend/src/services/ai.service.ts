@@ -37,6 +37,8 @@ export interface ExtractedParameter {
   panel: string;
   sourceLine?: string;
   patientLabel?: string;
+  /** Set by the AI service when a scanned value sat next to a likely OCR misread. */
+  ocrUncertain?: boolean;
 }
 
 export interface AiAnalysis {

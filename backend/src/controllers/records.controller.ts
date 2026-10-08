@@ -9,6 +9,7 @@ import { PdfService, SummaryRecord } from '../services/pdf.service';
 import { compareParameters, describeTrend } from '../services/insights.service';
 import { prisma } from '../config/database';
 import { fail, guard, ok, zodMessage } from '../lib/http';
+import { buildIndicators, INDICATOR_DISCLAIMER, NOT_ASSESSED, Reading } from '../services/indicators.service';
 
 /** Fields returned in list views — deliberately excludes ocrText and the full
  *  extracted payload so the dashboard stays fast. */
@@ -600,6 +601,49 @@ export class RecordsController {
           : undefined,
     });
   }, 'Failed to build your trends.');
+
+  /**
+   * Watch indicators for the signed-in patient: the newest usable value of each
+   * parameter compared with published guideline thresholds. Deterministic,
+   * source-cited, and never a diagnosis (see indicators.service.ts).
+   */
+  static getIndicators = guard(async (req: AuthRequest, res: Response) => {
+    const userId = req.user.userId;
+
+    const [user, records] = await Promise.all([
+      prisma.user.findUnique({ where: { id: userId }, select: { sex: true } }),
+      prisma.healthRecord.findMany({
+        where: { userId, status: ProcessStatus.DONE },
+        orderBy: { uploadedAt: 'asc' },
+        select: { id: true, uploadedAt: true, reportDate: true, extractedData: true },
+      }),
+    ]);
+
+    const readings: Reading[] = [];
+    for (const record of records) {
+      const params = ((record.extractedData as any)?.parameters || []) as ExtractedParameter[];
+      for (const p of params) {
+        readings.push({
+          key: p.key,
+          testName: p.testName,
+          value: p.value,
+          unit: p.unit,
+          status: p.status,
+          confidence: p.confidence,
+          ocrUncertain: p.ocrUncertain,
+          date: record.reportDate ?? record.uploadedAt,
+          recordId: record.id,
+        });
+      }
+    }
+
+    return ok(res, {
+      indicators: buildIndicators(readings, user?.sex),
+      reportsConsidered: records.length,
+      notAssessed: NOT_ASSESSED,
+      disclaimer: INDICATOR_DISCLAIMER,
+    });
+  }, 'Failed to build your indicators.');
 
   /** Side-by-side comparison of two of the patient's own reports. */
   static compare = guard(async (req: AuthRequest, res: Response) => {

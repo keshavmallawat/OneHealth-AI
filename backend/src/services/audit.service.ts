@@ -30,6 +30,7 @@ export type AuditAction =
   | 'SHARE_SESSION_REVOKED'
   | 'SHARE_SESSION_REDEEMED'
   | 'UPDATE_PROFILE'
+  | 'EMERGENCY_CARD_GENERATED'
   | 'ASSISTANT_QUERY';
 
 export interface AuditInput {

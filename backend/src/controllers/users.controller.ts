@@ -10,6 +10,7 @@
 import { Response } from 'express';
 import { Role } from '@prisma/client';
 import { z } from 'zod';
+import QRCode from 'qrcode';
 import { prisma } from '../config/database';
 import { CryptoService } from '../services/crypto.service';
 import { IdentityService } from '../services/identity.service';
@@ -194,6 +195,67 @@ export class UsersController {
   }, 'Failed to update the profile.');
 
   /** Issue a fresh share code, invalidating the previous one. */
+  /**
+   * Emergency card. The QR encodes the chosen details as plain text so that any
+   * phone camera can read it with no network and no account - which is exactly
+   * what makes it useful in an emergency, and exactly why the patient chooses
+   * what goes in it and is told that anyone holding the printed code can read it.
+   * Only fields the patient entered themselves are included; nothing is inferred.
+   */
+  static getEmergencyCard = guard(async (req: any, res: Response) => {
+    const FIELDS = ['name', 'bloodType', 'allergies', 'conditions', 'emergencyContact'] as const;
+    const raw = typeof req.query.include === 'string' ? req.query.include : FIELDS.join(',');
+    const requested = raw.split(',').map((f: string) => f.trim()).filter(Boolean);
+    const unknown = requested.filter((f: string) => !(FIELDS as readonly string[]).includes(f));
+    if (unknown.length) return fail(res, 400, `Unknown emergency card field: ${unknown[0]}.`);
+
+    const user = await prisma.user.findUnique({ where: { id: req.user.userId } });
+    if (!user) return fail(res, 404, 'Your account could not be found.');
+
+    const lines: string[] = [];
+    const included: string[] = [];
+    const add = (field: string, label: string, value: string | null | undefined) => {
+      if (!requested.includes(field) || !value) return;
+      lines.push(`${label}: ${value}`);
+      included.push(field);
+    };
+    add('name', 'Name', user.name);
+    add('bloodType', 'Blood group', user.bloodType);
+    add('allergies', 'Allergies', user.allergies.length ? user.allergies.join(', ') : null);
+    add('conditions', 'Ongoing conditions', user.chronicConditions.length ? user.chronicConditions.join(', ') : null);
+    add(
+      'emergencyContact',
+      'Emergency contact',
+      user.emergencyPhone ? `${user.emergencyName ? `${user.emergencyName} ` : ''}${user.emergencyPhone}` : null
+    );
+
+    if (lines.length === 0) {
+      return fail(
+        res,
+        400,
+        'There is nothing to put on the card yet. Add blood group, allergies, conditions or an emergency contact to your profile first.'
+      );
+    }
+
+    const text = ['ONEHEALTH EMERGENCY CARD', ...lines, 'Entered by the patient and not verified by a clinician.'].join('\n');
+    const qrDataUrl = await QRCode.toDataURL(text, {
+      errorCorrectionLevel: 'M',
+      margin: 2,
+      width: 360,
+      color: { dark: '#0f172a', light: '#ffffff' },
+    });
+
+    await AuditService.record({
+      actorId: req.user.userId,
+      patientId: req.user.userId,
+      action: 'EMERGENCY_CARD_GENERATED',
+      detail: `Included: ${included.join(', ')}`,
+      ipAddress: req.ip,
+    });
+
+    return ok(res, { text, qrDataUrl, included, available: FIELDS });
+  }, 'Failed to build the emergency card.');
+
   static rotateShareCode = guard(async (req: any, res: Response) => {
     const code = await IdentityService.generateShareCode();
     await prisma.user.update({ where: { id: req.user.userId }, data: { shareCode: code } });
