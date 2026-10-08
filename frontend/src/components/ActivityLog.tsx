@@ -34,6 +34,7 @@ export const ACTION_META: Record<string, { label: string; icon: React.ElementTyp
   SHARE_SESSION_REVOKED: { label: 'cancelled a share code', icon: QrCode },
   SHARE_SESSION_REDEEMED: { label: 'used a share code to connect', icon: QrCode },
   UPDATE_PROFILE: { label: 'updated the profile', icon: UserCog },
+  EMERGENCY_CARD_GENERATED: { label: 'generated an emergency card', icon: QrCode },
   ASSISTANT_QUERY: { label: 'asked the health assistant', icon: MessageSquareText },
 };
 

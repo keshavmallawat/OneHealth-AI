@@ -69,6 +69,11 @@ const ResultsTable: React.FC<{ parameters: ExtractedParameter[] }> = ({ paramete
                 >
                   <th scope="row" className="px-5 py-3 text-left align-top font-medium text-ink font-clinical">
                     {parameter.testName}
+                    {parameter.ocrUncertain && (
+                      <span className="mt-0.5 block text-[13px] font-normal text-low font-sans">
+                        This number may have been misread from the scan. Please check it against your original report.
+                      </span>
+                    )}
                     {parameter.patientLabel && (
                       <span className="mt-0.5 block text-[13px] font-normal text-muted font-sans">
                         {parameter.patientLabel}
@@ -484,6 +489,15 @@ const ReportDetail: React.FC = () => {
               }
               icon={FileText}
             />
+            {detail.parameters.length > 0 && detail.extraction && detail.extraction.source !== 'pdf_text_layer' && (
+              <div className="px-5 pt-4">
+                <Alert tone="warning" title="Read from a scanned image">
+                  Text recognition can misread digits, especially in photos. Please compare each value with
+                  your original report before relying on it. Values the system is unsure about are marked
+                  &ldquo;not compared&rdquo; rather than guessed.
+                </Alert>
+              </div>
+            )}
             {detail.parameters.length > 0 ? (
               <ResultsTable parameters={detail.parameters} />
             ) : (

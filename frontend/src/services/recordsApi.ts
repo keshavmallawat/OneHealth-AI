@@ -19,6 +19,8 @@ export interface ExtractedParameter {
   panel: string;
   sourceLine?: string;
   patientLabel?: string;
+  /** True when the value sat next to a character OCR likely misread. */
+  ocrUncertain?: boolean;
 }
 
 export interface RecordSummary {
@@ -141,7 +143,35 @@ export interface ActivityEntry {
   actor: { name: string; role: string };
 }
 
+export interface IndicatorBasis {
+  testName: string;
+  value: number;
+  unit: string;
+  date: string;
+  recordId: string;
+  note: string;
+}
+
+export interface WatchIndicator {
+  id: string;
+  title: string;
+  level: 'WATCH' | 'DISCUSS';
+  summary: string;
+  basis: IndicatorBasis[];
+  source: string;
+}
+
+export interface IndicatorsResponse {
+  indicators: WatchIndicator[];
+  reportsConsidered: number;
+  notAssessed: string[];
+  disclaimer: string;
+}
+
 export const recordsApi = {
+  indicators: () =>
+    api.get('/records/indicators').then((r) => r.data.data as IndicatorsResponse),
+
   /** scope 'all' includes clinician access to this patient's data. */
   activity: (limit = 15, scope: 'all' | 'mine' = 'all') =>
     api.get('/records/activity', { params: { limit, scope } }).then(

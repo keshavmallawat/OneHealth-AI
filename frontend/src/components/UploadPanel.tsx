@@ -1,6 +1,6 @@
-/** Drag-and-drop upload with client-side validation and progress. */
+/** Drag-and-drop upload (one or several files) with client-side validation and progress. */
 import React, { useCallback, useRef, useState } from 'react';
-import { FileText, Image as ImageIcon, Upload, X } from 'lucide-react';
+import { AlertCircle, Check, FileText, Image as ImageIcon, Upload, X } from 'lucide-react';
 import { recordsApi } from '../services/recordsApi';
 import { apiErrorMessage } from '../services/apiClient';
 import { formatBytes, RECORD_TYPE_LABELS } from '../lib/format';
@@ -8,13 +8,17 @@ import { Alert, Button, Field, Input, Select } from './ui';
 
 const ACCEPTED = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/tiff'];
 const MAX_MB = 25;
+const MAX_FILES = 10;
+
+type QueueItem = { id: number; file: File; state: 'ready' | 'uploading' | 'done' | 'failed'; message?: string };
+let nextQueueId = 1;
 
 const UploadPanel: React.FC<{ onUploaded: () => void; compact?: boolean }> = ({
   onUploaded,
   compact,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [file, setFile] = useState<File | null>(null);
+  const [queue, setQueue] = useState<QueueItem[]>([]);
   const [type, setType] = useState('BLOOD_TEST');
   const [tags, setTags] = useState('');
   const [labName, setLabName] = useState('');
@@ -35,39 +39,66 @@ const UploadPanel: React.FC<{ onUploaded: () => void; compact?: boolean }> = ({
     return '';
   };
 
-  const choose = useCallback((candidate: File | undefined) => {
-    if (!candidate) return;
-    const problem = validate(candidate);
-    setError(problem);
-    setFile(problem ? null : candidate);
+  const choose = useCallback((candidates: FileList | File[] | null | undefined) => {
+    const incoming = Array.from(candidates ?? []);
+    if (incoming.length === 0) return;
+    const problems: string[] = [];
+    setQueue((current) => {
+      const room = MAX_FILES - current.length;
+      const accepted: QueueItem[] = [];
+      for (const candidate of incoming) {
+        const problem = validate(candidate);
+        if (problem) {
+          problems.push(`${candidate.name}: ${problem}`);
+        } else if (accepted.length >= room) {
+          problems.push(`${candidate.name}: at most ${MAX_FILES} files can be queued at once.`);
+        } else {
+          accepted.push({ id: nextQueueId++, file: candidate, state: 'ready' });
+        }
+      }
+      return [...current, ...accepted];
+    });
+    // The state updater above runs synchronously enough for `problems` to be filled
+    // before the next render; show them together.
+    setError(problems.join(' '));
+    if (inputRef.current) inputRef.current.value = '';
   }, []);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!file) return;
+    const pending = queue.filter((item) => item.state === 'ready' || item.state === 'failed');
+    if (pending.length === 0) return;
     setBusy(true);
     setError('');
-    setProgress(0);
-    try {
-      await recordsApi.upload(file, type, tags, setProgress, {
-        labName: labName.trim() || undefined,
-        reportDate: reportDate || undefined,
-      });
-      setFile(null);
-      setTags('');
-      setLabName('');
-      setReportDate('');
+    let anyUploaded = false;
+    // One at a time: the API analyses each report as it arrives, and sequential
+    // uploads keep the progress bar meaningful and the server load predictable.
+    for (const item of pending) {
       setProgress(0);
-      if (inputRef.current) inputRef.current.value = '';
+      setQueue((q) => q.map((x) => (x.id === item.id ? { ...x, state: 'uploading', message: undefined } : x)));
+      try {
+        await recordsApi.upload(item.file, type, tags, setProgress, {
+          labName: labName.trim() || undefined,
+          reportDate: reportDate || undefined,
+        });
+        anyUploaded = true;
+        setQueue((q) => q.map((x) => (x.id === item.id ? { ...x, state: 'done' } : x)));
+      } catch (err) {
+        const message = apiErrorMessage(err, 'The upload failed. Please try again.');
+        setQueue((q) => q.map((x) => (x.id === item.id ? { ...x, state: 'failed', message } : x)));
+      }
+    }
+    setProgress(0);
+    setBusy(false);
+    if (anyUploaded) {
+      // Finished files leave the queue; failed ones stay so they can be retried.
+      setQueue((q) => q.filter((x) => x.state !== 'done'));
       onUploaded();
-    } catch (err) {
-      setError(apiErrorMessage(err, 'The upload failed. Please try again.'));
-    } finally {
-      setBusy(false);
     }
   };
 
-  const FileIcon = file?.type === 'application/pdf' ? FileText : ImageIcon;
+  const remove = (id: number) => setQueue((q) => q.filter((x) => x.id !== id));
+  const waiting = queue.filter((item) => item.state === 'ready' || item.state === 'failed').length;
 
   return (
     <form onSubmit={submit} className="p-5 space-y-4">
@@ -80,7 +111,7 @@ const UploadPanel: React.FC<{ onUploaded: () => void; compact?: boolean }> = ({
         onDrop={(e) => {
           e.preventDefault();
           setDragging(false);
-          choose(e.dataTransfer.files?.[0]);
+          choose(e.dataTransfer.files);
         }}
         onClick={() => inputRef.current?.click()}
         onKeyDown={(e) => {
@@ -91,7 +122,7 @@ const UploadPanel: React.FC<{ onUploaded: () => void; compact?: boolean }> = ({
         }}
         role="button"
         tabIndex={0}
-        aria-label="Choose a report to upload"
+        aria-label="Choose reports to upload"
         className={`rounded-md border-2 border-dashed p-6 text-center cursor-pointer transition-colors ${
           dragging ? 'border-primary bg-primary-soft' : 'border-line hover:border-line-strong hover:bg-canvas'
         }`}
@@ -102,43 +133,60 @@ const UploadPanel: React.FC<{ onUploaded: () => void; compact?: boolean }> = ({
           type="file"
           className="sr-only"
           accept={ACCEPTED.join(',')}
-          onChange={(e) => choose(e.target.files?.[0])}
+          multiple
+          onChange={(e) => choose(e.target.files)}
         />
-        {file ? (
-          <div className="flex items-center justify-center gap-3">
-            <span className="h-9 w-9 shrink-0 rounded-md border border-line bg-surface grid place-items-center">
-              <FileIcon className="h-4 w-4 text-primary" aria-hidden="true" />
-            </span>
-            <div className="text-left min-w-0">
-              <p className="text-sm font-medium text-ink truncate max-w-[13rem]">{file.name}</p>
-              <p className="text-xs text-muted">{formatBytes(file.size)}</p>
-            </div>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setFile(null);
-                if (inputRef.current) inputRef.current.value = '';
-              }}
-              className="ml-1 rounded p-1 text-muted hover:bg-line-soft hover:text-ink transition-colors"
-              aria-label="Remove selected file"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center">
-            <span className="h-9 w-9 rounded-md border border-line bg-surface grid place-items-center mb-2.5">
-              <Upload className="h-4 w-4 text-muted" aria-hidden="true" />
-            </span>
-            <p className="text-sm text-ink">
-              Drop a report here, or <span className="text-primary font-medium">browse</span>
-            </p>
-            <p className="mt-1 text-xs text-muted">PDF, JPEG, PNG or TIFF · up to {MAX_MB} MB</p>
-          </div>
-        )}
+        <div className="flex flex-col items-center">
+          <span className="h-9 w-9 rounded-md border border-line bg-surface grid place-items-center mb-2.5">
+            <Upload className="h-4 w-4 text-muted" aria-hidden="true" />
+          </span>
+          <p className="text-sm text-ink">
+            Drop reports here, or <span className="text-primary font-medium">browse</span>
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            PDF, JPEG, PNG or TIFF · up to {MAX_MB} MB each · up to {MAX_FILES} files
+          </p>
+        </div>
       </div>
-      
+
+      {queue.length > 0 && (
+        <ul className="space-y-1.5" aria-label="Files waiting to upload">
+          {queue.map((item) => {
+            const Icon = item.file.type === 'application/pdf' ? FileText : ImageIcon;
+            return (
+              <li
+                key={item.id}
+                className="flex items-center gap-3 rounded-md border border-line bg-surface px-3 py-2"
+              >
+                <Icon className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-ink truncate">{item.file.name}</p>
+                  <p className={`text-xs ${item.state === 'failed' ? 'text-high' : 'text-muted'}`}>
+                    {item.state === 'uploading'
+                      ? 'Uploading…'
+                      : item.state === 'failed'
+                        ? item.message ?? 'Upload failed'
+                        : formatBytes(item.file.size)}
+                  </p>
+                </div>
+                {item.state === 'failed' && <AlertCircle className="h-4 w-4 text-high" aria-hidden="true" />}
+                {item.state === 'done' && <Check className="h-4 w-4 text-normal" aria-hidden="true" />}
+                {item.state !== 'uploading' && item.state !== 'done' && (
+                  <button
+                    type="button"
+                    onClick={() => remove(item.id)}
+                    className="rounded p-1 text-muted hover:bg-line-soft hover:text-ink transition-colors"
+                    aria-label={`Remove ${item.file.name}`}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
       <div className={`grid gap-4 ${compact ? 'sm:grid-cols-2' : 'sm:grid-cols-2'}`}>
         <Field label="Record type" htmlFor="record-type">
           <Select id="record-type" value={type} onChange={(e) => setType(e.target.value)}>
@@ -200,9 +248,9 @@ const UploadPanel: React.FC<{ onUploaded: () => void; compact?: boolean }> = ({
 
       {error && <Alert tone="error">{error}</Alert>}
 
-      <Button type="submit" disabled={!file} loading={busy} className="w-full">
+      <Button type="submit" disabled={waiting === 0} loading={busy} className="w-full">
         <Upload className="h-4 w-4" aria-hidden="true" />
-        {busy ? 'Uploading…' : 'Upload and analyse'}
+        {busy ? 'Uploading…' : waiting > 1 ? `Upload and analyse ${waiting} reports` : 'Upload and analyse'}
       </Button>
     </form>
   );

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Check, Copy, Plus, RefreshCw, Save, ShieldCheck, Stethoscope, UserCog, X } from 'lucide-react';
+import { Check, Copy, Plus, QrCode, RefreshCw, Save, ShieldCheck, Stethoscope, UserCog, X } from 'lucide-react';
 import { usersApi } from '../services/usersApi';
 import type { UserProfile } from '../services/usersApi';
 import { apiErrorMessage } from '../services/apiClient';
@@ -81,6 +81,96 @@ const TagEditor: React.FC<{
         </ul>
       )}
     </div>
+  );
+};
+
+const CARD_FIELDS: Array<{ key: string; label: string }> = [
+  { key: 'name', label: 'My name' },
+  { key: 'bloodType', label: 'Blood group' },
+  { key: 'allergies', label: 'Allergies' },
+  { key: 'conditions', label: 'Ongoing conditions' },
+  { key: 'emergencyContact', label: 'Emergency contact' },
+];
+
+/** Printable emergency QR. The patient picks what goes on it; the code is readable offline. */
+const EmergencyCardPanel: React.FC = () => {
+  const [include, setInclude] = useState<string[]>(CARD_FIELDS.map((f) => f.key));
+  const [card, setCard] = useState<{ text: string; qrDataUrl: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const toggle = (key: string) =>
+    setInclude((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+
+  const generate = async () => {
+    setBusy(true);
+    setMessage('');
+    try {
+      setCard(await usersApi.emergencyCard(include));
+    } catch (err) {
+      setCard(null);
+      setMessage(apiErrorMessage(err, 'The emergency card could not be created.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Panel>
+      <PanelHeader
+        title="Emergency card"
+        description="A QR code a first responder can scan with any phone camera, with no sign-in or internet"
+        icon={QrCode}
+      />
+      <div className="space-y-4 p-5">
+        <Alert tone="warning" title="Anyone who holds the printed code can read it">
+          The details are stored in the code itself. Include only what you are comfortable with, and
+          keep the printout somewhere you control. Save your profile first so the card uses your latest details.
+        </Alert>
+        <fieldset>
+          <legend className="mb-2 text-sm font-medium text-ink">Show on the card</legend>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            {CARD_FIELDS.map((f) => (
+              <label key={f.key} className="flex items-center gap-2 text-sm text-ink-soft">
+                <input
+                  type="checkbox"
+                  checked={include.includes(f.key)}
+                  onChange={() => toggle(f.key)}
+                  className="h-4 w-4 rounded border-line"
+                />
+                {f.label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <Button variant="secondary" onClick={generate} disabled={busy || include.length === 0}>
+          <QrCode className="h-4 w-4" aria-hidden="true" />
+          {card ? 'Update card' : 'Create card'}
+        </Button>
+        {message && <Alert tone="error">{message}</Alert>}
+        {card && (
+          <div className="flex flex-col items-start gap-4 sm:flex-row">
+            <img
+              src={card.qrDataUrl}
+              alt="Emergency card QR code"
+              className="h-44 w-44 rounded-md border border-line bg-white p-1"
+            />
+            <div className="min-w-0 space-y-2">
+              <pre className="whitespace-pre-wrap rounded-md border border-line bg-sunken p-3 font-mono text-xs text-ink">
+                {card.text}
+              </pre>
+              <a
+                href={card.qrDataUrl}
+                download="onehealth-emergency-card.png"
+                className="inline-block text-[13px] font-medium text-primary hover:underline"
+              >
+                Download the QR image to print
+              </a>
+            </div>
+          </div>
+        )}
+      </div>
+    </Panel>
   );
 };
 
@@ -447,6 +537,8 @@ const Profile: React.FC = () => {
               </div>
             </Panel>
           )}
+
+          {!isDoctor && <EmergencyCardPanel />}
 
           <Panel>
             <PanelHeader title="How your data is held" />

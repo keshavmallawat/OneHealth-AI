@@ -26,6 +26,11 @@ export interface UserProfile {
 }
 
 export const usersApi = {
+  emergencyCard: (include: string[]) =>
+    api
+      .get('/users/me/emergency-card', { params: { include: include.join(',') } })
+      .then((r) => r.data.data as { text: string; qrDataUrl: string; included: string[] }),
+
   getProfile: () =>
     api.get('/users/me/profile').then((r) => r.data.data.profile as UserProfile),
 

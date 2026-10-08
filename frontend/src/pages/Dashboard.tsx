@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Activity, AlertTriangle, BellRing, CheckCircle2, Download, FileText, Loader2,
+  Activity, AlertTriangle, BellRing, CheckCircle2, Download, Eye, FileText, Loader2,
   RefreshCw, Share2, Upload as UploadIcon,
 } from 'lucide-react';
 import { recordsApi } from '../services/recordsApi';
-import type { HealthStats, RecordSummary } from '../services/recordsApi';
+import type { HealthStats, IndicatorsResponse, RecordSummary } from '../services/recordsApi';
 import { remindersApi } from '../services/remindersApi';
 import type { Reminder } from '../services/remindersApi';
 import { usersApi } from '../services/usersApi';
@@ -65,11 +65,64 @@ const IdentityCard: React.FC<{ profile: UserProfile | null }> = ({ profile }) =>
   );
 };
 
+/**
+ * Watch indicators: guideline thresholds applied to the newest value of each test.
+ * Deliberately modest in tone - "worth watching" / "worth discussing", never a diagnosis.
+ */
+const IndicatorsPanel: React.FC<{ data: IndicatorsResponse | null }> = ({ data }) => {
+  if (!data || data.reportsConsidered === 0) return null;
+  return (
+    <Panel>
+      <PanelHeader
+        title="Worth watching"
+        description="Your latest values compared with published guideline thresholds"
+        icon={Eye}
+      />
+      {data.indicators.length === 0 ? (
+        <div className="p-5 text-sm text-ink-soft">
+          None of your latest values fall in a range these guidelines flag. This covers only the tests
+          printed on your uploaded reports.
+        </div>
+      ) : (
+        <ul className="divide-y divide-line-soft">
+          {data.indicators.map((indicator) => (
+            <li key={indicator.id} className="p-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-semibold text-ink">{indicator.title}</p>
+                <Badge tone={indicator.level === 'DISCUSS' ? 'danger' : 'neutral'}>
+                  {indicator.level === 'DISCUSS' ? 'Worth discussing with a clinician' : 'Worth keeping an eye on'}
+                </Badge>
+              </div>
+              <p className="mt-1.5 text-sm text-ink-soft">{indicator.summary}</p>
+              <ul className="mt-3 space-y-1.5">
+                {indicator.basis.map((b) => (
+                  <li key={`${b.testName}-${b.recordId}`} className="text-[13px] text-muted">
+                    <Link to={`/reports/${b.recordId}`} className="font-medium text-ink hover:underline">
+                      {b.testName} {b.value} {b.unit}
+                    </Link>{' '}
+                    ({formatDate(b.date)}) — {b.note}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs text-muted">Source: {indicator.source}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="border-t border-line-soft px-5 py-3 text-xs leading-relaxed text-muted">
+        {data.disclaimer}
+        <span className="mt-1 block">Not assessed: {data.notAssessed.join('; ')}.</span>
+      </div>
+    </Panel>
+  );
+};
+
 const Dashboard: React.FC = () => {
   const [records, setRecords] = useState<RecordSummary[]>([]);
   const [stats, setStats] = useState<HealthStats | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [indicators, setIndicators] = useState<IndicatorsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
@@ -79,12 +132,14 @@ const Dashboard: React.FC = () => {
   const load = useCallback(async (showSpinner = false) => {
     if (showSpinner) setLoading(true);
     try {
-      const [list, overview, me, reminderData] = await Promise.all([
+      const [list, overview, me, reminderData, indicatorData] = await Promise.all([
         recordsApi.list({ limit: 5 }),
         recordsApi.stats(),
         usersApi.getProfile(),
         remindersApi.list().catch(() => ({ reminders: [], counts: { open: 0, overdue: 0 } })),
+        recordsApi.indicators().catch(() => null),
       ]);
+      setIndicators(indicatorData);
       setRecords(list.records);
       setStats(overview);
       setProfile(me);
@@ -360,6 +415,8 @@ const Dashboard: React.FC = () => {
               </div>
             </Panel>
           )}
+
+          <IndicatorsPanel data={indicators} />
 
           <Panel>
             <PanelHeader
