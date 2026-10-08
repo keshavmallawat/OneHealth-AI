@@ -96,6 +96,43 @@ def test_summary_never_empty_and_has_no_invented_numbers():
     assert build_deterministic_summary([])  # empty case still produces text
 
 
+def test_ocr_confusions_are_recovered():
+    """Patterns seen when Tesseract reads real lab-style scans."""
+    # Exponent in x10^3/uL comes back as a degree sign: must not be read as /uL.
+    plt = _one("Platelet Count 317 x10°3/uL 150 - 450", "PLATELETS")
+    assert plt is not None and plt["value"] == 317.0, plt
+    wbc = _one("Total Leukocyte Count 3.0 L x10*3/uL 4.0 - 11.0", "WBC")
+    assert wbc is not None and wbc["value"] == 3.0, wbc
+    # HbA1c with the digit 1 read as a lowercase L.
+    a1c = _one("HbAlc 4.6 % 4.0 - 5.6 %", "HBA1C")
+    assert a1c is not None and a1c["value"] == 4.6, a1c
+    # The glycosylated spelling used by many Indian labs.
+    gly = _one("Glycosylated Hemoglobin (HbA1c) 6.2 H % 4.0 - 5.6 %", "HBA1C")
+    assert gly is not None and gly["value"] == 6.2, gly
+    # ...and it must never leak into the haemoglobin result.
+    assert _one("Glycosylated Hemoglobin (HbA1c) 6.2 H % 4.0 - 5.6 %", "HEMOGLOBIN") is None
+
+
+def test_misread_labels_and_values_are_not_reported_confidently():
+    """The silent-wrong cases found by the benchmark: they must fail safe."""
+    def one(text, key, ocr=True):
+        params = extract_parameters(text, from_ocr=ocr)["parameters"]
+        return next((p for p in params if p["key"] == key), None)
+
+    # OCR garbled "LDL" -> "LOL": the LDL result must never become total cholesterol.
+    assert one("LOL Cholesterol 132 mg/dL < 100 mg/dL", "CHOLESTEROL_TOTAL") is None
+    # A clean line still works, including when the label is first on the line.
+    assert one("Cholesterol - Total 292 H mg/dL < 200", "CHOLESTEROL_TOTAL")["value"] == 292.0
+    # Result unreadable: the first number is the reference range, not the result.
+    assert one("HbAlc Boake 4.0 - 5.6 %", "HBA1C") is None
+    assert one("Total Cholesterol < 200 mg/dL", "CHOLESTEROL_TOTAL") is None
+    # First digit misread as a symbol: value is flagged unreliable, never NORMAL/HIGH/LOW.
+    ldl = one("LDL Cholesterol $7 mg/dL < 100", "LDL")
+    assert ldl is not None and ldl["status"] == "UNKNOWN" and ldl["ocrUncertain"], ldl
+    # The same glued form on a digital (non-OCR) report is left alone.
+    assert one("ALT 52 U/L 7 - 56", "ALT", ocr=False)["status"] == "NORMAL"
+
+
 def _run_all() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

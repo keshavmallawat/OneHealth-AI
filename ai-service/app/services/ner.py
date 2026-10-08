@@ -35,6 +35,13 @@ _MAX_RE = re.compile(r"(?:<|<=|less than|upto|up to)\s*" + _NUMBER, re.IGNORECAS
 _MIN_RE = re.compile(r"(?:>|>=|greater than|above)\s*" + _NUMBER, re.IGNORECASE)
 
 
+# A dash-like mark (OCR also gives "=" or "~") followed by a digit or a symbol that
+# stands in for one: the number just before it is the lower bound of a range.
+_RANGE_START_RE = re.compile(r"\s*[-–—=~]\s*[\d$§¢]")
+
+_LEADING_QUALIFIER_RE = re.compile(r"^\s*\((?!\s*\d[\d.,]*\s*\))[^)]*\)")
+
+
 def _alias(pattern: str) -> re.Pattern[str]:
     """Word-boundary alias matcher tolerant of extra spaces and OCR noise."""
     escaped = re.escape(pattern).replace(r"\ ", r"[\s\.\-_]*")
@@ -47,9 +54,12 @@ def _alias(pattern: str) -> re.Pattern[str]:
 PARAMETER_PATTERNS: list[dict[str, Any]] = [
     # --- Checked before HEMOGLOBIN so "HbA1c" never matches the "Hb" alias ---
     {"key": "HBA1C",
-     "aliases": ["glycated hemoglobin", "glycosylated haemoglobin", "glycated haemoglobin",
-                 "hba1c", "hb a1c", "a1c"],
-     "specific": {"glycated hemoglobin", "glycosylated haemoglobin", "glycated haemoglobin", "hba1c"}},
+     "aliases": ["glycated hemoglobin", "glycosylated hemoglobin", "glycosylated haemoglobin",
+                 "glycated haemoglobin", "hba1c", "hb a1c", "a1c",
+                 # OCR commonly reads the digit 1 as a lowercase L or an I.
+                 "hbalc", "hbaic"],
+     "specific": {"glycated hemoglobin", "glycosylated hemoglobin", "glycosylated haemoglobin",
+                  "glycated haemoglobin", "hba1c"}},
     {"key": "HEMOGLOBIN",
      "aliases": ["hemoglobin", "haemoglobin", "hgb", "hb"],
      "specific": {"hemoglobin", "haemoglobin"},
@@ -95,6 +105,10 @@ PARAMETER_PATTERNS: list[dict[str, Any]] = [
     {"key": "CHOLESTEROL_TOTAL",
      "aliases": ["total cholesterol", "cholesterol total", "serum cholesterol", "cholesterol"],
      "specific": {"total cholesterol", "cholesterol total", "serum cholesterol"},
+     # The bare word "cholesterol" is also the tail of "LDL/HDL Cholesterol". If OCR
+     # garbles the prefix ("LOL Cholesterol") the bare alias would claim the line and
+     # report an LDL value as total cholesterol, so it is only trusted at line start.
+     "anchorStart": {"cholesterol"},
      "excludeIfLine": ["hdl", "ldl", "vldl", "ratio", "non-hdl"]},
     {"key": "ALT",
      "aliases": ["alanine aminotransferase", "alanine transaminase", "sgpt", "alt"],
@@ -134,7 +148,7 @@ UNIT_CONVERSIONS: dict[str, list[tuple[str, float]]] = {
 }
 
 _UNIT_TOKEN_RE = re.compile(
-    r"(10\^?\*?[36]\s*/\s*[uµ]l|lakhs?\s*/\s*cumm|million\s*/\s*cumm|mill\s*/\s*cumm|"
+    r"(10\s*[\^\*°º·]?\s*[36]\s*/\s*[uµ]l|lakhs?\s*/\s*cumm|million\s*/\s*cumm|mill\s*/\s*cumm|"
     r"cells\s*/\s*cumm|thou\s*/\s*[uµ]l|k\s*/\s*[uµ]l|"
     r"g\s*/\s*dl|gm\s*/\s*dl|gm\s*%|g\s*%|g\s*/\s*l|"
     r"mg\s*/\s*dl|mg\s*%|mmol\s*/\s*l|[uµ]mol\s*/\s*l|"
@@ -146,7 +160,11 @@ _UNIT_TOKEN_RE = re.compile(
 
 
 def _normalise_unit(raw: str) -> str:
-    return re.sub(r"\s+", "", raw.lower()).replace("*", "^").replace("µ", "u")
+    cleaned = re.sub(r"\s+", "", raw.lower())
+    # OCR renders the exponent in 10^3 as ^, *, a degree sign or a middle dot.
+    for mark in ("*", "°", "º", "·"):
+        cleaned = cleaned.replace(mark, "^")
+    return cleaned.replace("µ", "u")
 
 
 def _convert(key: str, value: float, unit_raw: str | None) -> tuple[float, str | None, bool]:
@@ -235,10 +253,41 @@ def extract_parameters(text: str, *, from_ocr: bool = False) -> dict[str, Any]:
                 if not match:
                     continue
 
+                if alias_text in spec.get("anchorStart", set()) and re.search(
+                    r"[A-Za-z0-9]", line[:match.start()]
+                ):
+                    continue
+
                 tail = line[match.end():]
+                # Skip a bracketed synonym or qualifier right after the name, e.g.
+                # "Glycosylated Hemoglobin (HbA1c) 6.2": the digit inside the
+                # brackets is part of a name, not the result. A bracket that holds
+                # only a number is left alone.
+                tail = _LEADING_QUALIFIER_RE.sub("", tail, count=1)
                 number_match = _NUMBER_RE.search(tail)
                 if not number_match:
                     break  # alias matched but no value on this line
+
+                # The first number on the line is a reference range or limit, not a
+                # result ("HbA1c <garbled> 4.0 - 5.6", "Cholesterol < 200"). The result
+                # is missing or unreadable; reporting the range bound would be wrong.
+                if (
+                    _RANGE_RE.match(tail, number_match.start())
+                    # "4.0 - $.6" / "30 = 40": a range whose upper bound OCR garbled
+                    or _RANGE_START_RE.match(tail, number_match.end())
+                    or re.search(r"[<>≤≥]\s*$", tail[:number_match.start()])
+                ):
+                    break
+
+                # OCR often turns the first digit into a symbol or letter ("$7" for
+                # 57, "IV3" for 13). The number regex then silently drops that
+                # character and returns a wrong value, so a number glued to a
+                # preceding non-digit character is treated as unreliable.
+                ocr_uncertain = False
+                if from_ocr and number_match.start() > 0:
+                    before = tail[number_match.start() - 1]
+                    if not before.isspace() and before not in "<>=:(-≤≥,":
+                        ocr_uncertain = True
 
                 raw_value = float(number_match.group(1).replace(",", "").rstrip("."))
                 after_value = tail[number_match.end():]
@@ -259,16 +308,18 @@ def extract_parameters(text: str, *, from_ocr: bool = False) -> dict[str, Any]:
                 effective = range_for(key, sex)
                 status = (
                     _classify(value, effective["low"], effective["high"])
-                    if plausible else STATUS_UNKNOWN
+                    if plausible and not ocr_uncertain else STATUS_UNKNOWN
                 )
 
                 confidence = _score_confidence(
                     is_specific=alias_text in spec.get("specific", set()),
                     unit_recognised=unit_recognised,
                     has_reported_range=reported is not None,
-                    plausible=plausible,
+                    plausible=plausible and not ocr_uncertain,
                     from_ocr=from_ocr,
                 )
+                if ocr_uncertain:
+                    confidence = min(confidence, 0.30)
 
                 candidate = {
                     "key": key,
@@ -288,6 +339,7 @@ def extract_parameters(text: str, *, from_ocr: bool = False) -> dict[str, Any]:
                     "panel": PANEL_OF.get(key, "Other"),
                     "sourceLine": line[:200],
                     "patientLabel": meta["patientLabel"],
+                    "ocrUncertain": ocr_uncertain,
                 }
 
                 existing = best.get(key)
