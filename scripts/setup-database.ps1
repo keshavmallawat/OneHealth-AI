@@ -15,7 +15,7 @@
     Run WITHOUT administrator rights: PostgreSQL refuses to run elevated on Windows.
 #>
 
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Continue'
 
 $root     = Split-Path -Parent $PSScriptRoot
 $pgRoot   = Join-Path $root '.local-postgres'

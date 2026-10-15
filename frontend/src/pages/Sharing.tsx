@@ -1,6 +1,18 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  Check, Clock, Copy, QrCode, RefreshCw, Search, Share2, ShieldCheck, ShieldX, Stethoscope, X,
+  Check,
+  Clock,
+  Copy,
+  QrCode,
+  RefreshCw,
+  Search,
+  Share2,
+  ShieldCheck,
+  ShieldX,
+  Stethoscope,
+  X,
+  Lock,
+  History,
 } from 'lucide-react';
 import { consentApi } from '../services/consentApi';
 import type { Consent, DoctorSummary } from '../services/consentApi';
@@ -12,8 +24,20 @@ import { apiErrorMessage } from '../services/apiClient';
 import { formatDateTime, relativeTime } from '../lib/format';
 import AppShell from '../components/AppShell';
 import {
-  Alert, Badge, Button, EmptyState, Field, Input, Modal, Panel, PanelHeader, PageHeader,
-  PageLoader, Select, StatusBadge, Tabs,
+  Alert,
+  Badge,
+  Button,
+  EmptyState,
+  Field,
+  Input,
+  Modal,
+  Panel,
+  PanelHeader,
+  PageHeader,
+  PageLoader,
+  Select,
+  StatusBadge,
+  Tabs,
 } from '../components/ui';
 
 type TabKey = 'access' | 'requests' | 'qr' | 'history';
@@ -34,26 +58,26 @@ const CopyField: React.FC<{ value: string; label: string }> = ({ value, label })
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Clipboard access can be blocked; the value stays selectable on screen.
+      // Clipboard access can be blocked; value remains selectable
     }
   };
   return (
     <div>
-      <p className="eyebrow mb-1.5">{label}</p>
+      <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">{label}</p>
       <div className="flex items-center gap-2">
-        <code className="flex-1 truncate rounded-md border border-line bg-sunken px-3 py-2 font-mono text-[13px] tracking-wide text-ink">
+        <code className="flex-1 truncate rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-3.5 py-2.5 font-mono text-xs font-semibold tracking-wider text-slate-900 dark:text-white shadow-xs">
           {value}
         </code>
-        <Button variant="secondary" size="sm" onClick={copy}>
+        <Button variant="secondary" size="sm" onClick={copy} className="shrink-0">
           {copied ? (
             <>
-              <Check className="h-3.5 w-3.5" aria-hidden="true" />
-              Copied
+              <Check className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
+              <span>Copied</span>
             </>
           ) : (
             <>
               <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-              Copy
+              <span>Copy</span>
             </>
           )}
         </Button>
@@ -72,43 +96,53 @@ const ConsentRow: React.FC<{
   const [duration, setDuration] = useState(72);
 
   return (
-    <li className="px-5 py-4">
+    <li className="px-5 py-4 transition-colors hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-medium text-ink">{doctor?.name ?? 'Unknown clinician'}</p>
-            <StatusBadge kind="consent" status={consent.active ? 'ACTIVE' : consent.status} />
-            {consent.origin === 'QR' && <Badge tone="primary">via QR</Badge>}
+        <div className="flex items-start gap-3.5 min-w-0 flex-1">
+          <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-tr from-sky-500/20 to-indigo-500/20 border border-sky-400/30 grid place-items-center text-sky-600 dark:text-sky-400">
+            <Stethoscope className="h-5 w-5" />
           </div>
 
-          <p className="mt-0.5 text-xs text-muted">
-            {[doctor?.specialization, doctor?.clinicName, doctor?.city].filter(Boolean).join(' · ') ||
-              'No practice details provided'}
-          </p>
-          {doctor?.registrationNumber && (
-            <p className="text-xs text-muted">Registration {doctor.registrationNumber}</p>
-          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-bold text-slate-900 dark:text-white">{doctor?.name ?? 'Authorised Clinician'}</p>
+              <StatusBadge kind="consent" status={consent.active ? 'ACTIVE' : consent.status} />
+              {consent.origin === 'QR' && (
+                <span className="rounded-md bg-sky-50 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800 px-2 py-0.5 text-[10px] font-bold text-sky-600 dark:text-sky-400">
+                  via QR Scan
+                </span>
+              )}
+            </div>
 
-          {consent.purpose && (
-            <p className="mt-2 text-sm text-ink-soft">
-              <span className="text-muted">Purpose: </span>
-              {consent.purpose}
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              {[doctor?.specialization, doctor?.clinicName, doctor?.city].filter(Boolean).join(' • ') ||
+                'Clinical practitioner'}
             </p>
-          )}
-
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
-            <span>Requested {relativeTime(consent.createdAt)}</span>
-            {consent.active && <span>Access ends {formatDateTime(consent.expiresAt)}</span>}
-            {consent.lastAccessedAt && (
-              <span>
-                Last opened {relativeTime(consent.lastAccessedAt)} · {consent.accessCount} view
-                {consent.accessCount === 1 ? '' : 's'}
-              </span>
+            {doctor?.registrationNumber && (
+              <p className="text-[11px] text-slate-400">License: {doctor.registrationNumber}</p>
             )}
-            {consent.revokedAt && <span>Revoked {relativeTime(consent.revokedAt)}</span>}
+
+            {consent.purpose && (
+              <div className="mt-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300">
+                <span className="font-semibold text-slate-400">Purpose: </span>
+                {consent.purpose}
+              </div>
+            )}
+
+            <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-400">
+              <span>Requested {relativeTime(consent.createdAt)}</span>
+              {consent.active && <span className="font-semibold text-emerald-600 dark:text-emerald-400">Access valid until {formatDateTime(consent.expiresAt)}</span>}
+              {consent.lastAccessedAt && (
+                <span>
+                  Last opened {relativeTime(consent.lastAccessedAt)} ({consent.accessCount} view{consent.accessCount === 1 ? '' : 's'})
+                </span>
+              )}
+              {consent.revokedAt && <span className="text-rose-500">Revoked {relativeTime(consent.revokedAt)}</span>}
+            </div>
           </div>
         </div>
 
+        {/* Action Controls */}
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           {consent.status === 'PENDING' && (
             <>
@@ -116,7 +150,7 @@ const ConsentRow: React.FC<{
                 value={duration}
                 onChange={(e) => setDuration(Number(e.target.value))}
                 aria-label="Access period"
-                className="w-auto py-1.5 text-xs"
+                className="w-auto py-1.5 text-xs font-medium"
               >
                 {DURATIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -130,7 +164,7 @@ const ConsentRow: React.FC<{
                 loading={busy}
               >
                 <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
-                Approve
+                Approve Access
               </Button>
               <Button
                 size="sm"
@@ -151,7 +185,7 @@ const ConsentRow: React.FC<{
               loading={busy}
             >
               <ShieldX className="h-3.5 w-3.5" aria-hidden="true" />
-              Revoke access
+              Revoke Access
             </Button>
           )}
         </div>
@@ -222,9 +256,9 @@ const Sharing: React.FC = () => {
         action === 'approve'
           ? await consentApi.approve(id, duration)
           : action === 'reject'
-          ? await consentApi.reject(id)
-          : await consentApi.revoke(id);
-      setNotice(response?.message ?? 'Updated.');
+            ? await consentApi.reject(id)
+            : await consentApi.revoke(id);
+      setNotice(response?.message ?? 'Consent successfully updated.');
       await load();
     } catch (err) {
       setError(apiErrorMessage(err, 'That request could not be updated.'));
@@ -239,7 +273,7 @@ const Sharing: React.FC = () => {
     setError('');
     try {
       const response = await consentApi.grant({ doctorId: chosen.id, durationHours: grantDuration });
-      setNotice(response?.message ?? 'Access granted.');
+      setNotice(response?.message ?? 'Access granted successfully.');
       setGranting(false);
       setChosen(null);
       setQuery('');
@@ -268,7 +302,7 @@ const Sharing: React.FC = () => {
     try {
       await shareApi.revoke(id);
       setQr(null);
-      setNotice('That share code no longer works.');
+      setNotice('That share code has been revoked and can no longer be used.');
       await load();
     } catch (err) {
       setError(apiErrorMessage(err, 'The share code could not be revoked.'));
@@ -279,7 +313,7 @@ const Sharing: React.FC = () => {
     try {
       const next = await usersApi.rotateShareCode();
       setProfile((current) => (current ? { ...current, shareCode: next } : current));
-      setNotice('A new share code has been issued. The previous one no longer works.');
+      setNotice('A new permanent share code has been generated. The previous one is invalidated.');
     } catch (err) {
       setError(apiErrorMessage(err, 'A new share code could not be issued.'));
     }
@@ -288,7 +322,7 @@ const Sharing: React.FC = () => {
   if (loading) {
     return (
       <AppShell>
-        <PageLoader label="Loading your sharing settings" />
+        <PageLoader label="Loading consent vault and sharing controls…" />
       </AppShell>
     );
   }
@@ -300,12 +334,12 @@ const Sharing: React.FC = () => {
   return (
     <AppShell>
       <PageHeader
-        title="Sharing & consent"
-        description="You decide which clinicians can see your records, for how long, and you can withdraw access at any moment."
+        title="Consent & Data Sharing Vault"
+        description="Explicit, revocable cryptographic access control. You decide which clinicians can inspect your records and for how long."
         actions={
           <Button onClick={() => setGranting(true)}>
             <Share2 className="h-4 w-4" aria-hidden="true" />
-            Share with a clinician
+            Grant Doctor Access
           </Button>
         }
       />
@@ -316,32 +350,37 @@ const Sharing: React.FC = () => {
       <Tabs<TabKey>
         value={tab}
         onChange={setTab}
-        className="mb-5"
+        className="mb-6"
         tabs={[
-          { value: 'access', label: 'Who has access', count: active.length },
-          { value: 'requests', label: 'Requests', count: pending.length },
-          { value: 'qr', label: 'Share by QR' },
-          { value: 'history', label: 'Past access', count: past.length },
+          { value: 'access', label: 'Active Clinicians', count: active.length },
+          { value: 'requests', label: 'Pending Requests', count: pending.length },
+          { value: 'qr', label: 'In-Person QR Share' },
+          { value: 'history', label: 'Access Audit History', count: past.length },
         ]}
       />
 
+      {/* Tab: Active Clinicians */}
       {tab === 'access' && (
-        <Panel>
-          <PanelHeader title="Clinicians with current access" icon={ShieldCheck} />
+        <Panel className="overflow-hidden shadow-xs">
+          <PanelHeader
+            title="Clinicians with Current Active Access"
+            description="These verified doctors currently hold time-limited read permission to your records"
+            icon={ShieldCheck}
+          />
           {active.length === 0 ? (
             <EmptyState
               icon={Stethoscope}
-              title="No one has access right now"
-              description="Nobody can see your records except you. Share with a clinician when you need them to review something."
+              title="Your Records are 100% Private"
+              description="No clinician holds access to your records right now. When you visit a clinic or hospital, you can grant time-limited access."
               action={
                 <Button onClick={() => setGranting(true)}>
                   <Share2 className="h-4 w-4" aria-hidden="true" />
-                  Share with a clinician
+                  Grant access to a clinician
                 </Button>
               }
             />
           ) : (
-            <ul className="divide-y divide-line">
+            <ul className="divide-y divide-slate-100 dark:divide-slate-800/80">
               {active.map((consent) => (
                 <ConsentRow key={consent.id} consent={consent} onDecide={decide} busyId={busyId} />
               ))}
@@ -350,19 +389,24 @@ const Sharing: React.FC = () => {
         </Panel>
       )}
 
+      {/* Tab: Pending Requests */}
       {tab === 'requests' && (
-        <div className="space-y-5">
-          <Panel>
-            <PanelHeader title="Requests awaiting your decision" icon={Clock} />
+        <div className="space-y-6">
+          <Panel className="overflow-hidden shadow-xs">
+            <PanelHeader
+              title="Incoming Access Requests"
+              description="Doctor requests requiring your explicit consent before records are released"
+              icon={Clock}
+            />
             {pending.length === 0 ? (
               <EmptyState
                 compact
                 icon={Clock}
-                title="No pending requests"
-                description="When a clinician asks for access using your share code, it will appear here for you to approve or decline."
+                title="No Pending Access Requests"
+                description="When a healthcare provider looks up your share code, their request will appear here for you to accept or decline."
               />
             ) : (
-              <ul className="divide-y divide-line">
+              <ul className="divide-y divide-slate-100 dark:divide-slate-800/80">
                 {pending.map((consent) => (
                   <ConsentRow key={consent.id} consent={consent} onDecide={decide} busyId={busyId} />
                 ))}
@@ -371,38 +415,39 @@ const Sharing: React.FC = () => {
           </Panel>
 
           {profile?.shareCode && (
-            <Panel>
-              <PanelHeader title="Your share code" />
-              <div className="space-y-4 p-5">
-                <p className="text-sm text-ink-soft">
-                  Give this code to a clinician so they can request access. It identifies you without
-                  revealing your email address, and a request still needs your approval before
-                  anything is shared.
+            <Panel className="overflow-hidden shadow-xs">
+              <PanelHeader title="Your Permanent Share Code" icon={Lock} />
+              <div className="space-y-4 p-5 sm:p-6">
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-xl">
+                  Provide this code to a clinic receptionist or doctor so they can send an access request. It references your records safely without ever revealing your personal email address.
                 </p>
-                <CopyField value={profile.shareCode} label="Share code" />
-                <Button variant="secondary" size="sm" onClick={rotateCode}>
-                  <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-                  Issue a new code
-                </Button>
+                <div className="max-w-md">
+                  <CopyField value={profile.shareCode} label="Patient Share Code" />
+                </div>
+                <div>
+                  <Button variant="secondary" size="sm" onClick={rotateCode}>
+                    <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                    Issue new share code
+                  </Button>
+                </div>
               </div>
             </Panel>
           )}
         </div>
       )}
 
+      {/* Tab: QR Share */}
       {tab === 'qr' && (
-        <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
-          <Panel>
-            <PanelHeader title="Share in person by QR" icon={QrCode} />
-            <div className="space-y-4 p-5">
-              <p className="text-sm text-ink-soft">
-                Generate a short-lived code for a clinician to scan during a consultation. The code
-                carries nothing but a random token — no name, no identifier and no medical
-                information — and it can only be used once.
+        <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+          <Panel className="overflow-hidden shadow-xs">
+            <PanelHeader title="Generate In-Person QR Code" description="Instant single-use scan token" icon={QrCode} />
+            <div className="space-y-5 p-5 sm:p-6">
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                Generate an ephemeral cryptographic token for a doctor to scan during an in-person consultation. The QR code contains no plaintext medical data and expires automatically.
               </p>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Code is valid for" htmlFor="qr-minutes">
+                <Field label="QR scan expires in" htmlFor="qr-minutes">
                   <Select
                     id="qr-minutes"
                     value={qrMinutes}
@@ -413,7 +458,7 @@ const Sharing: React.FC = () => {
                     <option value={60}>1 hour</option>
                   </Select>
                 </Field>
-                <Field label="Grants access for" htmlFor="qr-duration">
+                <Field label="Grants doctor access for" htmlFor="qr-duration">
                   <Select
                     id="qr-duration"
                     value={qrDuration}
@@ -428,64 +473,66 @@ const Sharing: React.FC = () => {
                 </Field>
               </div>
 
-              <Button onClick={createQr} loading={qrBusy} className="w-full">
+              <Button onClick={createQr} loading={qrBusy} className="w-full py-2.5">
                 <QrCode className="h-4 w-4" aria-hidden="true" />
-                Generate share code
+                Generate Single-Use QR Token
               </Button>
 
               {qr && (
-                <div className="rounded-md border border-line bg-sunken p-5 text-center">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 p-6 text-center shadow-xs">
                   <img
                     src={qr.qrDataUrl}
                     alt="QR code containing a single-use share token"
-                    className="mx-auto h-48 w-48 rounded-md border border-line bg-white p-2"
+                    className="mx-auto h-52 w-52 rounded-xl border border-slate-200 dark:border-slate-700 bg-white p-3 shadow-md"
                   />
-                  <p className="mt-3 text-sm text-ink">
-                    Expires {formatDateTime(qr.session.expiresAt)}
+                  <p className="mt-4 text-sm font-bold text-slate-900 dark:text-white">
+                    Scan to Redeem Access
                   </p>
-                  <p className="mt-0.5 text-xs text-muted">
-                    Single use · grants {qr.session.grantDurationHrs} hours of read-only access
+                  <p className="mt-0.5 text-xs text-slate-400">
+                    Expires {formatDateTime(qr.session.expiresAt)} • Grants {qr.session.grantDurationHrs}h access
                   </p>
-                  <div className="mt-4 text-left">
-                    <CopyField value={qr.session.token} label="Or read this code aloud" />
+                  <div className="mt-4 text-left max-w-sm mx-auto">
+                    <CopyField value={qr.session.token} label="Direct Access Token" />
                   </div>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    className="mt-3"
-                    onClick={() => revokeSession(qr.session.id)}
-                  >
-                    Cancel this code
-                  </Button>
+                  <div className="mt-4">
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => revokeSession(qr.session.id)}
+                    >
+                      Revoke QR Code
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
           </Panel>
 
-          <Panel>
-            <PanelHeader title="Recent share codes" />
+          {/* Recent share codes */}
+          <Panel className="overflow-hidden shadow-xs">
+            <PanelHeader title="Active & Recent QR Sessions" icon={History} />
             {sessions.length === 0 ? (
-              <EmptyState compact icon={QrCode} title="No share codes yet" />
+              <EmptyState compact icon={QrCode} title="No Recent QR Sessions" />
             ) : (
-              <ul className="divide-y divide-line">
+              <ul className="divide-y divide-slate-100 dark:divide-slate-800/80">
                 {sessions.map((session) => (
-                  <li key={session.id} className="flex items-center gap-3 px-5 py-3">
+                  <li key={session.id} className="flex items-center gap-3 px-5 py-3.5">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <StatusBadge kind="share" status={session.status} />
-                        <span className="text-xs text-muted">
-                          created {relativeTime(session.createdAt)}
+                        <span className="text-xs text-slate-400">
+                          {relativeTime(session.createdAt)}
                         </span>
                       </div>
                       {session.claimedBy && (
-                        <p className="mt-1 text-sm text-ink">
-                          Used by {session.claimedBy.name} {relativeTime(session.claimedAt!)}
+                        <p className="mt-1 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                          Redeemed by {session.claimedBy.name} {relativeTime(session.claimedAt!)}
                         </p>
                       )}
                     </div>
                     {session.status === 'ACTIVE' && (
                       <Button size="sm" variant="ghost" onClick={() => revokeSession(session.id)}>
-                        Cancel
+                        Revoke
                       </Button>
                     )}
                   </li>
@@ -496,13 +543,19 @@ const Sharing: React.FC = () => {
         </div>
       )}
 
+      {/* Tab: History */}
       {tab === 'history' && (
-        <Panel>
-          <PanelHeader title="Access that has ended" />
+        <Panel className="overflow-hidden shadow-xs">
+          <PanelHeader title="Expired & Revoked Access History" icon={ShieldX} />
           {past.length === 0 ? (
-            <EmptyState compact icon={ShieldX} title="Nothing here yet" description="Expired, declined and revoked access appears here." />
+            <EmptyState
+              compact
+              icon={ShieldX}
+              title="No Past Consents"
+              description="Historical expired, declined, and revoked access sessions will be recorded here for compliance."
+            />
           ) : (
-            <ul className="divide-y divide-line">
+            <ul className="divide-y divide-slate-100 dark:divide-slate-800/80">
               {past.map((consent) => (
                 <ConsentRow key={consent.id} consent={consent} onDecide={decide} busyId={busyId} />
               ))}
@@ -511,44 +564,44 @@ const Sharing: React.FC = () => {
         </Panel>
       )}
 
-      {/* Grant access directly */}
+      {/* Grant Access Modal */}
       <Modal
         open={granting}
         onClose={() => setGranting(false)}
-        title="Share your records with a clinician"
-        description="Access is read-only, time limited, and you can revoke it at any moment."
+        title="Direct Clinician Consent Grant"
+        description="Search for a verified clinician to grant time-limited read permission to your records."
         footer={
           <>
             <Button variant="secondary" onClick={() => setGranting(false)}>
               Cancel
             </Button>
             <Button onClick={grant} loading={grantBusy} disabled={!chosen}>
-              Grant access
+              Grant Access
             </Button>
           </>
         }
       >
         <div className="space-y-4">
-          <Field label="Find a clinician" htmlFor="doctor-search">
+          <Field label="Search verified clinician" htmlFor="doctor-search">
             <div className="relative">
               <Search
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint"
+                className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400"
                 aria-hidden="true"
               />
               <Input
                 id="doctor-search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search by name, speciality, clinic or city"
-                className="pl-9"
+                placeholder="Search by clinician name, clinic, or city…"
+                className="pl-10"
               />
             </div>
           </Field>
 
-          <div className="max-h-64 space-y-1.5 overflow-y-auto">
+          <div className="max-h-60 space-y-2 overflow-y-auto pr-1">
             {directory.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted">
-                No clinicians match that search.
+              <p className="py-8 text-center text-xs text-slate-400">
+                No clinicians matching that query.
               </p>
             ) : (
               directory.map((doctor) => {
@@ -560,24 +613,28 @@ const Sharing: React.FC = () => {
                     type="button"
                     disabled={alreadyActive}
                     onClick={() => setChosen(doctor)}
-                    className={`w-full rounded-md border px-3.5 py-2.5 text-left transition-colors ${
+                    className={`w-full rounded-xl border p-3.5 text-left transition-all cursor-pointer ${
                       selected
-                        ? 'border-primary bg-primary-soft'
+                        ? 'border-sky-500 bg-sky-50 dark:bg-sky-950/40 ring-1 ring-sky-500'
                         : alreadyActive
-                        ? 'cursor-not-allowed border-line bg-sunken opacity-70'
-                        : 'border-line hover:bg-sunken'
+                          ? 'cursor-not-allowed border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 opacity-60'
+                          : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-ink">{doctor.name}</p>
-                        <p className="truncate text-xs text-muted">
+                        <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                          {doctor.name}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
                           {[doctor.specialization, doctor.clinicName, doctor.city]
                             .filter(Boolean)
-                            .join(' · ') || 'No practice details provided'}
+                            .join(' • ') || 'Verified doctor'}
                         </p>
                       </div>
-                      {alreadyActive && <Badge tone="success">Already has access</Badge>}
+                      {alreadyActive && (
+                        <Badge tone="success">Already Active</Badge>
+                      )}
                     </div>
                   </button>
                 );
@@ -585,7 +642,7 @@ const Sharing: React.FC = () => {
             )}
           </div>
 
-          <Field label="Access period" htmlFor="grant-duration">
+          <Field label="Access duration" htmlFor="grant-duration">
             <Select
               id="grant-duration"
               value={grantDuration}

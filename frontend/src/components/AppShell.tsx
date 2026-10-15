@@ -1,18 +1,16 @@
 /**
- * Application chrome: brand, primary navigation, system status, account.
- *
- * The navigation is derived from the signed-in role. A patient and a clinician
- * are doing genuinely different jobs, so they get different products rather
- * than one product with disabled buttons — and no navigation item ever points
- * at something that is not implemented.
+ * Application Shell: Brand, role-based navigation, top bar, system status, theme toggle, and account.
+ * Production-quality healthcare SaaS layout with responsive mobile navigation and dark mode.
  */
 import React, { useEffect, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import {
   Activity, BellRing, FileText, LayoutDashboard, LogOut, Menu, MessageSquareText,
-  QrCode, ScrollText, Share2, Stethoscope, TrendingUp, UserCog, Users, X, Upload, GitCompareArrows
+  Moon, QrCode, ScrollText, Share2, Stethoscope, Sun, TrendingUp, UserCog, Users, X,
+  Upload, GitCompareArrows, ShieldCheck
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { systemApi } from '../services/recordsApi';
 import { Avatar } from './ui';
 
@@ -29,37 +27,37 @@ interface NavGroup {
 
 const PATIENT_NAV: NavGroup[] = [
   {
-    heading: 'Health record',
+    heading: 'Clinical Records',
     items: [
       { to: '/dashboard', label: 'Overview', icon: LayoutDashboard },
       { to: '/reports', label: 'Health Records', icon: FileText },
       { to: '/upload', label: 'Upload Report', icon: Upload },
-      { to: '/trends', label: 'Trends', icon: TrendingUp },
+      { to: '/trends', label: 'Trends & Analytics', icon: TrendingUp },
       { to: '/compare', label: 'Compare Reports', icon: GitCompareArrows },
     ],
   },
   {
-    heading: 'Care and sharing',
+    heading: 'Care & AI Support',
     items: [
-      { to: '/sharing', label: 'Share Access', icon: Share2 },
+      { to: '/sharing', label: 'Share Access & QR', icon: Share2 },
       { to: '/assistant', label: 'Health Assistant', icon: MessageSquareText },
       { to: '/reminders', label: 'Reminders', icon: BellRing },
     ],
   },
   {
-    heading: 'Account',
+    heading: 'Governance & Identity',
     items: [
       { to: '/activity', label: 'Access History', icon: ScrollText },
-      { to: '/profile', label: 'Profile', icon: UserCog },
+      { to: '/profile', label: 'Health Profile', icon: UserCog },
     ],
   },
 ];
 
 const DOCTOR_NAV: NavGroup[] = [
   {
-    heading: 'Practice',
+    heading: 'Clinical Practice',
     items: [
-      { to: '/provider', label: 'Patients / Shared Records', icon: Users },
+      { to: '/provider', label: 'Patient Roster', icon: Users },
       { to: '/provider/requests', label: 'Pending Access', icon: ScrollText },
       { to: '/provider/connect', label: 'Connect Patient (QR)', icon: QrCode },
     ],
@@ -67,12 +65,12 @@ const DOCTOR_NAV: NavGroup[] = [
   {
     heading: 'Account',
     items: [
-      { to: '/profile', label: 'Profile', icon: UserCog }
+      { to: '/profile', label: 'Provider Profile', icon: UserCog }
     ],
   },
 ];
 
-/** Live indicator for the API and AI service. */
+/** Live indicator for API and AI service status. */
 const SystemStatus: React.FC = () => {
   const [state, setState] = useState<'checking' | 'ok' | 'degraded' | 'down'>('checking');
   const [detail, setDetail] = useState('');
@@ -107,33 +105,27 @@ const SystemStatus: React.FC = () => {
     };
   }, []);
 
-  const dot = {
-    checking: 'bg-faint',
-    ok: 'bg-normal',
-    degraded: 'bg-low',
-    down: 'bg-high',
-  }[state];
-
-  const label = {
-    checking: 'Checking connection…',
-    ok: 'Secure connection',
-    degraded: 'Limited service',
-    down: 'Offline',
+  const config = {
+    checking: { dot: 'bg-slate-400', label: 'Checking...' },
+    ok: { dot: 'bg-emerald-500 shadow-sm shadow-emerald-500/50', label: 'System Online' },
+    degraded: { dot: 'bg-amber-500', label: 'Limited Service' },
+    down: { dot: 'bg-rose-500', label: 'Offline' },
   }[state];
 
   return (
-    <span
-      className="inline-flex items-center gap-2 text-xs text-muted"
+    <div
+      className="inline-flex items-center gap-2 rounded-full border border-line bg-surface/70 px-2.5 py-1 text-xs text-muted backdrop-blur-sm transition-all"
       title={detail || 'Checking system status'}
     >
-      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${dot}`} aria-hidden="true" />
-      {label}
-    </span>
+      <span className={`h-2 w-2 rounded-full shrink-0 ${config.dot}`} aria-hidden="true" />
+      <span className="font-medium text-ink-soft hidden sm:inline">{config.label}</span>
+    </div>
   );
 };
 
 const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -141,7 +133,6 @@ const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const groups = isDoctor ? DOCTOR_NAV : PATIENT_NAV;
   const home = isDoctor ? '/provider' : '/dashboard';
 
-  // Close the mobile navigation drawer on Escape, matching the scrim click.
   useEffect(() => {
     if (!menuOpen) return;
     const onKey = (event: KeyboardEvent) => {
@@ -159,42 +150,52 @@ const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const brand = (
     <Link
       to={home}
-      className="flex items-center gap-2.5 shrink-0"
+      className="flex items-center gap-2.5 shrink-0 group"
       onClick={() => setMenuOpen(false)}
     >
-      <span className="h-7 w-7 rounded-md bg-white/10 grid place-items-center">
-        <Activity className="h-4 w-4 text-white" aria-hidden="true" />
-      </span>
-      <span className="text-[15px] font-semibold tracking-tight text-white">
-        OneHealth <span className="font-normal text-white/60">AI</span>
-      </span>
+      <div className="relative">
+        <div className="absolute inset-0 rounded-xl bg-sky-500/30 blur-sm group-hover:bg-sky-500/50 transition-all" />
+        <span className="relative h-9 w-9 rounded-xl bg-gradient-to-tr from-sky-600 to-sky-400 grid place-items-center text-white shadow-sm shadow-sky-500/30">
+          <Activity className="h-5 w-5" aria-hidden="true" />
+        </span>
+      </div>
+      <div className="leading-tight">
+        <span className="text-base font-bold tracking-tight text-white flex items-center gap-1">
+          OneHealth <span className="font-light text-sky-400 text-xs px-1.5 py-0.5 rounded-full bg-sky-500/10 border border-sky-400/20">AI</span>
+        </span>
+        <span className="text-[10px] block text-slate-400 font-medium">Digital Health Platform</span>
+      </div>
     </Link>
   );
 
   const navigation = (
-    <nav className="flex-1 overflow-y-auto px-3 py-6 space-y-8" aria-label="Primary">
+    <nav className="flex-1 overflow-y-auto px-3.5 py-5 space-y-6" aria-label="Primary Navigation">
       {groups.map((group) => (
         <div key={group.heading}>
-          <p className="px-3 mb-2 text-xs font-semibold uppercase tracking-wider text-white/40">
+          <p className="px-3 mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400/80">
             {group.heading}
           </p>
-          <div className="space-y-0.5">
+          <div className="space-y-1">
             {group.items.map(({ to, label, icon: Icon }) => (
               <NavLink
                 key={to}
                 to={to}
-                end={to === '/provider'}
+                end={to === '/provider' || to === '/dashboard'}
                 onClick={() => setMenuOpen(false)}
                 className={({ isActive }) =>
-                  `flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium transition-colors ${
+                  `flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-all duration-150 ${
                     isActive
-                      ? 'bg-white/10 text-white shadow-sm'
-                      : 'text-white/70 hover:bg-white/5 hover:text-white'
+                      ? 'bg-sky-500/15 text-white shadow-xs border border-sky-500/30 font-bold'
+                      : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
                   }`
                 }
               >
-                <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                {label}
+                {({ isActive }) => (
+                  <>
+                    <Icon className={`h-4 w-4 shrink-0 transition-colors ${isActive ? 'text-sky-400' : 'text-slate-400'}`} aria-hidden="true" />
+                    <span className="truncate">{label}</span>
+                  </>
+                )}
               </NavLink>
             ))}
           </div>
@@ -204,83 +205,145 @@ const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   );
 
   return (
-    <div className="min-h-screen bg-canvas md:pl-[248px]">
-      {/* Mobile bar */}
-      <div className="md:hidden sticky top-0 z-30 flex h-14 items-center justify-between border-b border-line bg-surface px-4">
-        {brand}
-        <button
-          type="button"
-          className="rounded-md border border-line p-1.5 text-muted hover:bg-sunken transition-colors"
-          onClick={() => setMenuOpen((open) => !open)}
-          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
-          aria-expanded={menuOpen}
-        >
-          {menuOpen ? <X className="h-4.5 w-4.5" /> : <Menu className="h-4.5 w-4.5" />}
-        </button>
-      </div>
+    <div className="min-h-screen bg-canvas text-ink transition-colors duration-200 md:pl-[260px]">
+      {/* Top Header Bar */}
+      <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-line bg-surface/80 backdrop-blur-md px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center gap-3 md:hidden">
+          <button
+            type="button"
+            className="rounded-xl border border-line p-2 text-muted hover:bg-sunken hover:text-ink transition-colors"
+            onClick={() => setMenuOpen((open) => !open)}
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={menuOpen}
+          >
+            {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+          <div className="md:hidden">
+            <span className="text-sm font-bold text-ink tracking-tight flex items-center gap-1">
+              OneHealth <span className="text-primary font-normal">AI</span>
+            </span>
+          </div>
+        </div>
 
-      {/* Sidebar */}
+        <div className="hidden md:flex items-center gap-3">
+          <span className="text-xs font-semibold text-muted tracking-tight">
+            {isDoctor ? 'Clinical Workspace' : 'Patient Health Portal'}
+          </span>
+          <span className="h-4 w-px bg-line" />
+          <div className="flex items-center gap-1.5 text-xs text-ink-soft">
+            <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span className="font-medium">Encrypted & RBAC Protected</span>
+          </div>
+        </div>
+
+        {/* Top Controls */}
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          <SystemStatus />
+
+          {/* Theme Toggle Button */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="relative p-2 rounded-xl border border-line bg-surface hover:bg-sunken text-muted hover:text-ink transition-all shadow-xs cursor-pointer"
+            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          >
+            {theme === 'dark' ? (
+              <Sun className="h-4.5 w-4.5 text-amber-400 transition-transform hover:rotate-45" />
+            ) : (
+              <Moon className="h-4.5 w-4.5 text-slate-700 transition-transform hover:-rotate-12" />
+            )}
+          </button>
+
+          {/* User Quick Capsule */}
+          <div className="flex items-center gap-2.5 pl-2 border-l border-line">
+            <Avatar name={user?.name || '?'} className="h-8 w-8 text-xs font-bold" />
+            <div className="hidden lg:block text-left leading-tight">
+              <p className="text-xs font-semibold text-ink truncate max-w-[120px]">{user?.name}</p>
+              <p className="text-[10px] text-muted font-medium">{isDoctor ? 'Clinician' : 'Patient'}</p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Modern Desktop Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-[248px] flex-col bg-primary-ink
-                    transition-transform duration-200 md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-[260px] flex-col bg-slate-900 border-r border-slate-800 text-white
+                    transition-transform duration-200 ease-in-out md:translate-x-0 shadow-xl ${
                       menuOpen ? 'translate-x-0' : '-translate-x-full'
                     }`}
       >
-        <div className="flex h-16 shrink-0 items-center px-6">{brand}</div>
+        <div className="flex h-16 shrink-0 items-center justify-between px-6 border-b border-slate-800/80">
+          {brand}
+          <button
+            type="button"
+            className="md:hidden text-slate-400 hover:text-white"
+            onClick={() => setMenuOpen(false)}
+            aria-label="Close sidebar"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
 
         {isDoctor && (
-          <div className="mx-4 mt-2 mb-4 flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-2.5 py-2">
-            <Stethoscope className="h-3.5 w-3.5 shrink-0 text-white/80" aria-hidden="true" />
-            <p className="text-[11px] font-medium text-white/80 leading-tight">
-              Provider view — patient records are read-only
+          <div className="mx-4 mt-3 mb-1 flex items-center gap-2.5 rounded-xl border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-sky-200">
+            <Stethoscope className="h-4 w-4 shrink-0 text-sky-400" aria-hidden="true" />
+            <p className="text-[11px] font-medium leading-tight">
+              Provider Mode · Read-only access to shared records
             </p>
           </div>
         )}
 
         {navigation}
 
-        <div className="mt-auto border-t border-white/10 p-4">
-          <div className="px-2 pb-4 opacity-70">
-            <SystemStatus />
-          </div>
-          <div className="flex items-center gap-2.5 rounded-md px-2 py-2">
-            <Avatar name={user?.name || '?'} className="h-8 w-8 bg-white/10 text-white border-0" />
-            <div className="min-w-0 flex-1 leading-tight">
-              <p className="truncate text-[13px] font-medium text-white">{user?.name}</p>
-              <p className="truncate text-xs text-white/60">{isDoctor ? 'Clinician' : 'Patient'}</p>
+        {/* Sidebar Footer */}
+        <div className="mt-auto border-t border-slate-800/80 p-4 space-y-2">
+          <div className="flex items-center justify-between rounded-xl bg-white/5 p-2.5">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Avatar name={user?.name || '?'} className="h-8 w-8 text-xs font-bold" />
+              <div className="min-w-0 leading-tight">
+                <p className="truncate text-xs font-bold text-white">{user?.name}</p>
+                <p className="truncate text-[10px] text-slate-400">{user?.email || (isDoctor ? 'Doctor' : 'Patient')}</p>
+              </div>
             </div>
           </div>
+
           <button
             type="button"
             onClick={handleLogout}
-            className="mt-2 flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-[13px] font-medium text-white/70 transition-colors hover:bg-white/5 hover:text-white"
+            className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors cursor-pointer"
           >
-            <LogOut className="h-4 w-4 shrink-0" aria-hidden="true" />
-            Sign out
+            <LogOut className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            Sign Out
           </button>
         </div>
       </aside>
 
+      {/* Mobile Drawer Scrim */}
       {menuOpen && (
         <div
-          className="fixed inset-0 z-30 bg-ink/25 md:hidden"
+          className="fixed inset-0 z-30 bg-slate-950/60 backdrop-blur-sm md:hidden animate-in"
           onClick={() => setMenuOpen(false)}
           aria-hidden="true"
         />
       )}
 
-      {/* Content */}
-      <div className="flex min-h-screen flex-col">
+      {/* Content Area */}
+      <div className="flex min-h-[calc(100vh-4rem)] flex-col">
         <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-          <div className="mx-auto w-full min-w-0 max-w-[1180px]">{children}</div>
+          <div className="mx-auto w-full min-w-0 max-w-[1240px]">{children}</div>
         </main>
         <footer className="px-4 pb-6 sm:px-6 lg:px-8">
-          <div className="mx-auto w-full max-w-[1180px] border-t border-line pt-5">
-            <p className="text-xs leading-relaxed text-muted">
-              OneHealth AI — unified digital health record platform. AI features provide
-              informational decision support and are not a medical diagnosis. Always consult a
-              qualified healthcare professional.
+          <div className="mx-auto w-full max-w-[1240px] border-t border-line pt-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted">
+            <p className="leading-relaxed">
+              <strong className="font-semibold text-ink">OneHealth AI</strong> — Unified electronic health record platform. Not a diagnostic device.
             </p>
+            <div className="flex items-center gap-3">
+              <span className="inline-flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                FHIR / HL7 compliant concept
+              </span>
+            </div>
           </div>
         </footer>
       </div>

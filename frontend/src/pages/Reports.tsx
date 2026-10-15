@@ -1,6 +1,21 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Filter, Search, SlidersHorizontal, Upload, X } from 'lucide-react';
+import {
+  Filter,
+  Search,
+  SlidersHorizontal,
+  Upload,
+  X,
+  LayoutGrid,
+  LayoutList,
+  Sparkles,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  ChevronLeft,
+  ChevronRight,
+  FileSpreadsheet,
+} from 'lucide-react';
 import { recordsApi } from '../services/recordsApi';
 import type { RecordSummary } from '../services/recordsApi';
 import { apiErrorMessage } from '../services/apiClient';
@@ -39,10 +54,10 @@ const Reports: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const pollRef = useRef<number | null>(null);
 
-  // The URL is the source of truth for filters, so a filtered view can be
-  // bookmarked, shared or reloaded without losing its state.
+  // URL state persistence
   const search = params.get('search') ?? '';
   const type = params.get('type') ?? '';
   const status = params.get('status') ?? '';
@@ -93,7 +108,6 @@ const Reports: React.FC = () => {
     }
   }, [page, search, type, status, tag, from, to, sort]);
 
-  // Debounce so typing in the search box does not fire a request per keystroke.
   useEffect(() => {
     const timer = setTimeout(load, search ? 300 : 0);
     return () => clearTimeout(timer);
@@ -118,49 +132,125 @@ const Reports: React.FC = () => {
     };
   }, [records, load]);
 
+  // Quick filter presets
+  const isStatusActive = (s: string) => status === s;
+
   return (
     <AppShell>
+      {/* Top Page Header */}
       <PageHeader
-        title="Medical records"
+        title="Medical Records"
         description={
           loading
-            ? 'Loading your record history…'
-            : `${total} record${total === 1 ? '' : 's'}${activeFilters || search ? ' matching your filters' : ' on file'}.`
+            ? 'Accessing your health history…'
+            : `${total} report${total === 1 ? '' : 's'}${
+                activeFilters || search ? ' matching your active filters' : ' recorded in your account'
+              }.`
         }
         actions={
-          <Link to="/upload">
-            <Button>
-              <Upload className="h-4 w-4" aria-hidden="true" />
-              Add record
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2.5">
+            <Link to="/upload">
+              <Button>
+                <Upload className="h-4 w-4" aria-hidden="true" />
+                Upload New Record
+              </Button>
+            </Link>
+          </div>
         }
       />
 
       {error && <Alert tone="error" className="mb-5">{error}</Alert>}
 
-      <Panel>
-        <div className="border-b border-line p-4">
-          <div className="flex flex-wrap gap-2.5">
-            <div className="relative min-w-[15rem] flex-1">
+      {/* Quick Status Pill Filter Bar */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setParam('status', '')}
+          className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+            !status
+              ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
+              : 'border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <FileSpreadsheet className="h-3.5 w-3.5" />
+          <span>All Records ({total})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setParam('status', isStatusActive('FLAGGED') ? '' : 'FLAGGED')}
+          className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+            isStatusActive('FLAGGED')
+              ? 'bg-rose-600 text-white shadow-sm shadow-rose-600/30'
+              : 'border border-rose-200/80 dark:border-rose-900/60 bg-rose-50/70 dark:bg-rose-950/20 text-rose-700 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/40'
+          }`}
+        >
+          <AlertTriangle className="h-3.5 w-3.5" />
+          <span>Flagged / Abnormal</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setParam('status', isStatusActive('NORMAL') ? '' : 'NORMAL')}
+          className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+            isStatusActive('NORMAL')
+              ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30'
+              : 'border border-emerald-200/80 dark:border-emerald-900/60 bg-emerald-50/70 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
+          }`}
+        >
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          <span>All in Range</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setParam('status', isStatusActive('PROCESSING') ? '' : 'PROCESSING')}
+          className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+            isStatusActive('PROCESSING')
+              ? 'bg-sky-600 text-white shadow-sm shadow-sky-600/30'
+              : 'border border-sky-200/80 dark:border-sky-900/60 bg-sky-50/70 dark:bg-sky-950/20 text-sky-700 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-900/40'
+          }`}
+        >
+          <Clock className="h-3.5 w-3.5" />
+          <span>Processing</span>
+        </button>
+      </div>
+
+      {/* Main Panel */}
+      <Panel className="overflow-hidden">
+        {/* Search & Action Bar */}
+        <div className="border-b border-slate-200/80 dark:border-slate-800/80 p-4 sm:p-5">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Search Input */}
+            <div className="relative min-w-[16rem] flex-1">
               <Search
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint"
+                className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
                 aria-hidden="true"
               />
               <Input
                 value={search}
                 onChange={(e) => setParam('search', e.target.value)}
-                placeholder="Search file name, laboratory, notes or tag"
+                placeholder="Search file name, lab name, biomarker, or tag…"
                 aria-label="Search records"
-                className="pl-9"
+                className="pl-10 pr-8"
               />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setParam('search', '')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
 
+            {/* Sort Select */}
             <Select
               value={sort}
               onChange={(e) => setParam('sort', e.target.value)}
               aria-label="Sort records"
-              className="w-auto"
+              className="w-auto text-xs"
             >
               {SORT_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -169,23 +259,54 @@ const Reports: React.FC = () => {
               ))}
             </Select>
 
+            {/* Filter Toggle Button */}
             <Button
               variant={showFilters || activeFilters ? 'secondary' : 'subtle'}
               onClick={() => setShowFilters((open) => !open)}
               aria-expanded={showFilters}
+              size="sm"
             >
-              <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
-              Filters
+              <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Filters</span>
               {activeFilters > 0 && (
-                <span className="ml-0.5 rounded-full bg-primary px-1.5 py-px text-[11px] text-white tabular">
+                <span className="ml-1 rounded-full bg-sky-600 px-1.5 py-0.2 text-[10px] font-bold text-white tabular">
                   {activeFilters}
                 </span>
               )}
             </Button>
+
+            {/* View Mode Toggle (List / Grid) */}
+            <div className="hidden sm:flex items-center rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/70 dark:bg-slate-800/70 p-0.5">
+              <button
+                type="button"
+                onClick={() => setViewMode('list')}
+                className={`p-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
+                  viewMode === 'list'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                aria-label="List view"
+              >
+                <LayoutList className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
+                  viewMode === 'grid'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                aria-label="Grid view"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
+          {/* Expandable Filter Drawer */}
           {showFilters && (
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-4 pt-4 border-t border-slate-200/70 dark:border-slate-800/70 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Field label="Record type" htmlFor="filter-type">
                 <Select id="filter-type" value={type} onChange={(e) => setParam('type', e.target.value)}>
                   <option value="">All types</option>
@@ -230,21 +351,23 @@ const Reports: React.FC = () => {
               </Field>
 
               {availableTags.length > 0 && (
-                <div className="sm:col-span-2 lg:col-span-4">
-                  <p className="eyebrow mb-2">Tags</p>
+                <div className="sm:col-span-2 lg:col-span-4 mt-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+                    Filter by Tag
+                  </p>
                   <div className="flex flex-wrap gap-1.5">
                     {availableTags.map((value) => (
                       <button
                         key={value}
                         type="button"
                         onClick={() => setParam('tag', tag === value ? '' : value)}
-                        className={`rounded border px-2 py-0.5 text-xs font-medium transition-colors ${
+                        className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors cursor-pointer ${
                           tag === value
-                            ? 'border-primary bg-primary-soft text-primary-ink'
-                            : 'border-line bg-surface text-ink-soft hover:bg-sunken'
+                            ? 'border-sky-500 bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold'
+                            : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:border-slate-300'
                         }`}
                       >
-                        {value}
+                        #{value}
                       </button>
                     ))}
                   </div>
@@ -252,47 +375,53 @@ const Reports: React.FC = () => {
               )}
 
               {activeFilters > 0 && (
-                <div className="sm:col-span-2 lg:col-span-4">
+                <div className="sm:col-span-2 lg:col-span-4 pt-2">
                   <Button variant="ghost" size="sm" onClick={clearFilters}>
                     <X className="h-3.5 w-3.5" aria-hidden="true" />
-                    Clear filters
+                    Reset all filters
                   </Button>
                 </div>
               )}
             </div>
           )}
 
+          {/* Active Filter Badges */}
           {activeFilters > 0 && !showFilters && (
-            <div className="mt-3 flex flex-wrap items-center gap-1.5">
-              <Filter className="h-3.5 w-3.5 text-muted" aria-hidden="true" />
+            <div className="mt-3.5 flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-semibold text-slate-400 flex items-center gap-1 mr-1">
+                <Filter className="h-3 w-3" />
+                Active filters:
+              </span>
               {type && <Badge tone="primary">{RECORD_TYPE_LABELS[type] ?? type}</Badge>}
               {status && (
                 <Badge tone="primary">
                   {STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status}
                 </Badge>
               )}
-              {tag && <Badge tone="primary">tag: {tag}</Badge>}
+              {tag && <Badge tone="primary">tag: #{tag}</Badge>}
               {from && <Badge tone="primary">from {from}</Badge>}
               {to && <Badge tone="primary">to {to}</Badge>}
               <button
                 type="button"
                 onClick={clearFilters}
-                className="ml-1 text-xs font-medium text-primary hover:underline"
+                className="ml-2 text-xs font-bold text-sky-600 dark:text-sky-400 hover:underline cursor-pointer"
               >
-                Clear
+                Clear all
               </button>
             </div>
           )}
         </div>
 
+        {/* Report Records (List or Grid) */}
         <ReportList
           records={records}
           loading={loading}
-          emptyTitle={search || activeFilters ? 'No matching records' : 'No records yet'}
+          viewMode={viewMode}
+          emptyTitle={search || activeFilters ? 'No matching medical records' : 'No medical records yet'}
           emptyDescription={
             search || activeFilters
-              ? 'Try a different search term, or clear the filters.'
-              : 'Upload your first medical report and the platform will read the values out of it.'
+              ? 'Try modifying your search query or removing active filters to see more results.'
+              : 'Upload a laboratory test, prescription, or clinical summary to extract values and begin longitudinal trend analysis.'
           }
           emptyAction={
             search || activeFilters ? (
@@ -303,27 +432,34 @@ const Reports: React.FC = () => {
               <Link to="/upload">
                 <Button>
                   <Upload className="h-4 w-4" aria-hidden="true" />
-                  Add a record
+                  Add your first record
                 </Button>
               </Link>
             )
           }
         />
 
+        {/* Pagination Footer */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between gap-3 border-t border-line px-5 py-3">
-            <p className="text-sm text-muted">
-              Page {page} of {totalPages}
+          <div className="flex items-center justify-between gap-3 border-t border-slate-200/80 dark:border-slate-800/80 px-6 py-4 bg-slate-50/50 dark:bg-slate-900/50">
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              Showing <span className="font-bold text-slate-700 dark:text-slate-300">{(page - 1) * PAGE_SIZE + 1}</span> to{' '}
+              <span className="font-bold text-slate-700 dark:text-slate-300">{Math.min(page * PAGE_SIZE, total)}</span> of{' '}
+              <span className="font-bold text-slate-700 dark:text-slate-300">{total}</span> records
             </p>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-1.5">
               <Button
                 variant="secondary"
                 size="sm"
                 disabled={page <= 1}
                 onClick={() => setPage((p) => p - 1)}
               >
+                <ChevronLeft className="h-3.5 w-3.5" />
                 Previous
               </Button>
+              <div className="px-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                {page} / {totalPages}
+              </div>
               <Button
                 variant="secondary"
                 size="sm"
@@ -331,11 +467,20 @@ const Reports: React.FC = () => {
                 onClick={() => setPage((p) => p + 1)}
               >
                 Next
+                <ChevronRight className="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>
         )}
       </Panel>
+
+      {/* Helpful Info Tip */}
+      <div className="mt-4 flex items-center justify-between text-xs text-slate-400 dark:text-slate-500 px-2">
+        <span className="flex items-center gap-1.5">
+          <Sparkles className="h-3.5 w-3.5 text-sky-500" />
+          Click any report row to view full OCR extraction, flagged biomarkers, and reference ranges.
+        </span>
+      </div>
     </AppShell>
   );
 };

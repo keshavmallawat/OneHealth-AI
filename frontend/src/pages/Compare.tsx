@@ -1,24 +1,43 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowRight, GitCompareArrows } from 'lucide-react';
+import {
+  ArrowRight,
+  GitCompareArrows,
+  ArrowUpRight,
+  ArrowDownRight,
+  Minus,
+  CheckCircle2,
+  AlertTriangle,
+  Calendar,
+  FileText,
+  Sparkles,
+} from 'lucide-react';
 import { recordsApi } from '../services/recordsApi';
 import type { Comparison, RecordSummary } from '../services/recordsApi';
 import { apiErrorMessage } from '../services/apiClient';
 import { formatDate } from '../lib/format';
 import AppShell from '../components/AppShell';
 import {
-  Alert, Badge, Button, Panel, PanelHeader, PageHeader, PageLoader, Select, EmptyState
+  Alert,
+  Badge,
+  Button,
+  Panel,
+  PanelHeader,
+  PageHeader,
+  PageLoader,
+  Select,
+  EmptyState,
 } from '../components/ui';
 
 const DirectionIcon: React.FC<{ direction: string }> = ({ direction }) => {
-  if (direction === 'INCREASED') return <span aria-hidden="true">↗</span>;
-  if (direction === 'DECREASED') return <span aria-hidden="true">↘</span>;
-  return <span aria-hidden="true">-</span>;
+  if (direction === 'INCREASED') return <ArrowUpRight className="h-3.5 w-3.5 text-rose-500" aria-hidden="true" />;
+  if (direction === 'DECREASED') return <ArrowDownRight className="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />;
+  return <Minus className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />;
 };
 
 const Compare: React.FC = () => {
   const [records, setRecords] = useState<RecordSummary[]>([]);
   const [loadingRecords, setLoadingRecords] = useState(true);
-  
+
   const [a, setA] = useState('');
   const [b, setB] = useState('');
   const [result, setResult] = useState<Comparison | null>(null);
@@ -64,7 +83,7 @@ const Compare: React.FC = () => {
   if (loadingRecords) {
     return (
       <AppShell>
-        <PageLoader label="Loading reports..." />
+        <PageLoader label="Loading medical records for comparison…" />
       </AppShell>
     );
   }
@@ -72,8 +91,8 @@ const Compare: React.FC = () => {
   return (
     <AppShell>
       <PageHeader
-        title="Compare Reports"
-        description="Deterministic difference between the values in two of your reports"
+        title="Compare Medical Reports"
+        description="Deterministic side-by-side comparative analysis of laboratory biomarkers between two points in time."
       />
 
       {error && <Alert tone="error" className="mb-5">{error}</Alert>}
@@ -82,108 +101,198 @@ const Compare: React.FC = () => {
         <Panel>
           <EmptyState
             icon={GitCompareArrows}
-            title="Not enough analysed reports"
-            description="You need at least two analysed reports to compare them."
+            title="At Least Two Reports Required"
+            description="Comparing biomarker movement requires two or more analysed records on file. Upload a second lab test to unlock side-by-side diffs."
           />
         </Panel>
       ) : (
-        <Panel>
-          <PanelHeader
-            title="Compare two reports"
-            icon={GitCompareArrows}
-          />
-          <div className="p-5">
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="min-w-[13rem] flex-1">
-                <label htmlFor="compare-a" className="mb-1.5 block text-[13px] font-medium text-ink-soft">
-                  Earlier report
-                </label>
-                <Select id="compare-a" value={a} onChange={(e) => setA(e.target.value)}>
-                  {analysed.map((record) => (
-                    <option key={record.id} value={record.id}>
-                      {record.fileName}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <ArrowRight className="mb-2.5 h-4 w-4 shrink-0 text-faint" aria-hidden="true" />
-              <div className="min-w-[13rem] flex-1">
-                <label htmlFor="compare-b" className="mb-1.5 block text-[13px] font-medium text-ink-soft">
-                  Later report
-                </label>
-                <Select id="compare-b" value={b} onChange={(e) => setB(e.target.value)}>
-                  {analysed.map((record) => (
-                    <option key={record.id} value={record.id}>
-                      {record.fileName}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <Button onClick={run} loading={busy} disabled={!a || !b || a === b}>
-                Compare
-              </Button>
-            </div>
-
-            {result && (
-              <div className="mt-5">
-                <div className="mb-4 flex flex-wrap gap-2">
-                  <Badge tone="success">{result.summary.improved} returned to range</Badge>
-                  <Badge tone="danger">{result.summary.worsened} newly out of range</Badge>
-                  <Badge>{result.summary.unchanged} unchanged</Badge>
-                  {result.summary.added > 0 && <Badge>{result.summary.added} newly tested</Badge>}
-                  {result.summary.removed > 0 && <Badge>{result.summary.removed} not repeated</Badge>}
+        <div className="space-y-6">
+          {/* Comparison Selector Card */}
+          <Panel className="overflow-hidden shadow-xs">
+            <PanelHeader
+              title="Select Two Records to Compare"
+              description="Choose an earlier baseline report and a later follow-up test"
+              icon={GitCompareArrows}
+            />
+            <div className="p-5 sm:p-6">
+              <div className="grid gap-4 sm:grid-cols-[1fr_auto_1fr_auto] items-end">
+                {/* Earlier Report */}
+                <div>
+                  <label htmlFor="compare-a" className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                    Baseline Report (Earlier)
+                  </label>
+                  <Select id="compare-a" value={a} onChange={(e) => setA(e.target.value)}>
+                    {analysed.map((record) => (
+                      <option key={record.id} value={record.id}>
+                        {record.fileName} {record.reportDate ? `(${formatDate(record.reportDate)})` : ''}
+                      </option>
+                    ))}
+                  </Select>
                 </div>
 
-                <div className="scroll-x">
-                  <table className="w-full min-w-[42rem] text-sm">
+                {/* Arrow Divider */}
+                <div className="hidden sm:flex items-center justify-center h-10 w-10 text-slate-400">
+                  <ArrowRight className="h-5 w-5" />
+                </div>
+
+                {/* Later Report */}
+                <div>
+                  <label htmlFor="compare-b" className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                    Comparison Report (Later)
+                  </label>
+                  <Select id="compare-b" value={b} onChange={(e) => setB(e.target.value)}>
+                    {analysed.map((record) => (
+                      <option key={record.id} value={record.id}>
+                        {record.fileName} {record.reportDate ? `(${formatDate(record.reportDate)})` : ''}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                {/* Compare Button */}
+                <Button onClick={run} loading={busy} disabled={!a || !b || a === b} className="h-10">
+                  <GitCompareArrows className="h-4 w-4" />
+                  Run Diff
+                </Button>
+              </div>
+
+              {a === b && (
+                <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">
+                  Please select two different reports to perform a comparison.
+                </p>
+              )}
+            </div>
+          </Panel>
+
+          {/* Results Section */}
+          {result && (
+            <Panel className="overflow-hidden shadow-xs">
+              <PanelHeader
+                title="Biomarker Movement Analysis"
+                description={`Compared: ${result.earlier.fileName} (${formatDate(result.earlier.date)}) → ${result.later.fileName} (${formatDate(result.later.date)})`}
+                icon={Sparkles}
+              />
+              <div className="p-5 sm:p-6">
+                {/* Summary Pills Bar */}
+                <div className="mb-6 flex flex-wrap gap-2.5">
+                  <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 px-3 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <span>{result.summary.improved} Returned to Range</span>
+                  </div>
+
+                  <div className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 px-3 py-1 text-xs font-bold text-rose-700 dark:text-rose-300">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    <span>{result.summary.worsened} Newly Out of Range</span>
+                  </div>
+
+                  <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 px-3 py-1 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    <span>{result.summary.unchanged} Unchanged</span>
+                  </div>
+
+                  {result.summary.added > 0 && (
+                    <div className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/40 px-3 py-1 text-xs font-semibold text-sky-700 dark:text-sky-300">
+                      <span>+{result.summary.added} Newly Tested</span>
+                    </div>
+                  )}
+
+                  {result.summary.removed > 0 && (
+                    <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 px-3 py-1 text-xs font-semibold text-slate-500">
+                      <span>{result.summary.removed} Not Repeated</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Diff Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[48rem] text-sm border-collapse">
                     <thead>
-                      <tr className="border-b border-line bg-sunken text-left">
-                        <th className="eyebrow px-4 py-2.5">Test</th>
-                        <th className="eyebrow px-3 py-2.5 text-right">
-                          {formatDate(result.earlier.date)}
+                      <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 text-left">
+                        <th className="px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                          Biomarker
                         </th>
-                        <th className="eyebrow px-3 py-2.5 text-right">
-                          {formatDate(result.later.date)}
+                        <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-right">
+                          <span className="flex items-center justify-end gap-1">
+                            <Calendar className="h-3 w-3" />
+                            Baseline ({formatDate(result.earlier.date)})
+                          </span>
                         </th>
-                        <th className="eyebrow px-3 py-2.5 text-right">Change</th>
-                        <th className="eyebrow px-4 py-2.5">Movement</th>
+                        <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-right">
+                          <span className="flex items-center justify-end gap-1">
+                            <Calendar className="h-3 w-3" />
+                            Later ({formatDate(result.later.date)})
+                          </span>
+                        </th>
+                        <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 text-right">
+                          Delta Change
+                        </th>
+                        <th className="px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                          Clinical Trend Status
+                        </th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
                       {result.rows.map((row) => (
-                        <tr key={row.key} className="border-b border-line-soft last:border-0">
-                          <th scope="row" className="px-4 py-2.5 text-left font-medium text-ink">
-                            {row.testName}
-                            <span className="ml-1.5 text-xs font-normal text-muted">{row.unit}</span>
+                        <tr
+                          key={row.key}
+                          className={`hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors ${
+                            row.newlyAbnormal ? 'bg-rose-50/30 dark:bg-rose-950/20' : row.returnedToRange ? 'bg-emerald-50/30 dark:bg-emerald-950/20' : ''
+                          }`}
+                        >
+                          <th scope="row" className="px-5 py-3.5 text-left font-semibold text-slate-900 dark:text-white">
+                            <div className="flex items-center gap-1.5">
+                              <FileText className="h-3.5 w-3.5 text-slate-400" />
+                              <span>{row.testName}</span>
+                            </div>
+                            <span className="text-[11px] font-normal text-slate-400 font-mono ml-5">
+                              {row.unit}
+                            </span>
                           </th>
-                          <td className="px-3 py-2.5 text-right tabular text-ink-soft">
-                            {row.earlier ? row.earlier.value : '—'}
+
+                          <td className="px-4 py-3.5 text-right tabular text-slate-600 dark:text-slate-300 font-mono">
+                            {row.earlier ? row.earlier.value : <span className="text-slate-400">—</span>}
                           </td>
-                          <td className="px-3 py-2.5 text-right tabular font-medium text-ink">
-                            {row.later ? row.later.value : '—'}
+
+                          <td className="px-4 py-3.5 text-right tabular font-bold text-slate-900 dark:text-white font-mono">
+                            {row.later ? row.later.value : <span className="text-slate-400">—</span>}
                           </td>
-                          <td className="px-3 py-2.5 text-right tabular text-ink-soft">
-                            {row.delta === null
-                              ? '—'
-                              : `${row.delta > 0 ? '+' : ''}${row.delta.toFixed(Math.abs(row.delta) < 1 ? 2 : 1)}`}
-                          </td>
-                          <td className="px-4 py-2.5">
-                            {row.direction === 'ADDED' ? (
-                              <Badge>Newly tested</Badge>
-                            ) : row.direction === 'REMOVED' ? (
-                              <Badge>Not repeated</Badge>
-                            ) : row.newlyAbnormal ? (
-                              <Badge tone="danger">Newly out of range</Badge>
-                            ) : row.returnedToRange ? (
-                              <Badge tone="success">Back in range</Badge>
+
+                          <td className="px-4 py-3.5 text-right tabular">
+                            {row.delta === null ? (
+                              <span className="text-slate-400">—</span>
                             ) : (
-                              <span className="inline-flex items-center gap-1.5 text-xs text-muted">
+                              <span
+                                className={`font-mono font-bold ${
+                                  row.newlyAbnormal
+                                    ? 'text-rose-600 dark:text-rose-400'
+                                    : row.returnedToRange
+                                      ? 'text-emerald-600 dark:text-emerald-400'
+                                      : 'text-slate-700 dark:text-slate-300'
+                                }`}
+                              >
+                                {row.delta > 0 ? `+${row.delta.toFixed(Math.abs(row.delta) < 1 ? 2 : 1)}` : row.delta.toFixed(Math.abs(row.delta) < 1 ? 2 : 1)}
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="px-5 py-3.5">
+                            {row.direction === 'ADDED' ? (
+                              <Badge tone="neutral">Newly Tested</Badge>
+                            ) : row.direction === 'REMOVED' ? (
+                              <Badge tone="neutral">Not Repeated</Badge>
+                            ) : row.newlyAbnormal ? (
+                              <Badge tone="danger">⚠️ Newly Out of Range</Badge>
+                            ) : row.returnedToRange ? (
+                              <Badge tone="success">✅ Back in Range</Badge>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 font-medium">
                                 <DirectionIcon direction={row.direction} />
-                                {row.direction === 'STABLE'
-                                  ? 'Unchanged'
-                                  : row.direction === 'INCREASED'
-                                  ? 'Increased'
-                                  : 'Decreased'}
+                                <span>
+                                  {row.direction === 'STABLE'
+                                    ? 'Stable'
+                                    : row.direction === 'INCREASED'
+                                      ? 'Increased'
+                                      : 'Decreased'}
+                                </span>
                               </span>
                             )}
                           </td>
@@ -193,9 +302,9 @@ const Compare: React.FC = () => {
                   </table>
                 </div>
               </div>
-            )}
-          </div>
-        </Panel>
+            </Panel>
+          )}
+        </div>
       )}
     </AppShell>
   );
